@@ -261,10 +261,8 @@ def sinal_estrategia_5_m3(cs):
     if len(cs) < 3:
         return None
     a, b, c = cs[-3], cs[-2], cs[-1]
-    # Maior no fechamento do meio em relação ao anterior e menor no fechamento seguinte -> PUT
     if b["close"] > a["close"] and c["close"] < b["close"] and baixa(c):
         return "put"
-    # Menor no fechamento do meio em relação ao anterior e maior no fechamento seguinte -> CALL
     if b["close"] < a["close"] and c["close"] > b["close"] and alta(c):
         return "call"
     return None
@@ -279,7 +277,6 @@ def avaliar_sinais(cs, cfg, log_fn=None):
 
     sinais_validos = []
 
-    # 1. Padrões individuais selecionados
     for p in padroes_sel:
         if p in DETECTORES_INDIVIDUAIS and DETECTORES_INDIVIDUAIS[p](cs):
             dir_p = DIRECAO[p]
@@ -289,7 +286,6 @@ def avaliar_sinais(cs, cfg, log_fn=None):
                 continue
             sinais_validos.append((p, dir_p))
 
-    # 2. Estratégia 1 - Classificador 5 Candles (usa filtro EMA 24/32 se ativado)
     if e1_ativo:
         d1 = sinal_estrategia_1_5candles(cs)
         if d1:
@@ -299,7 +295,6 @@ def avaliar_sinais(cs, cfg, log_fn=None):
             else:
                 sinais_validos.append(("Est. 1 (5 Candles)", d1))
 
-    # 3. Estratégia 2 - Padrão de Reversão (usa filtro EMA 24/32 se ativado)
     if e2_ativo:
         d2 = sinal_estrategia_2_reversao(cs, minimo_rev)
         if d2:
@@ -309,7 +304,6 @@ def avaliar_sinais(cs, cfg, log_fn=None):
             else:
                 sinais_validos.append((f"Est. 2 (Reversão {minimo_rev})", d2))
 
-    # 4. Estratégia 5 - Maior Menor Menor (NÃO usa filtro EMA 24/32)
     if e5_ativo:
         d5 = sinal_estrategia_5_m3(cs)
         if d5:
@@ -382,7 +376,6 @@ def rodar_robo(sessao_id, cfg):
         if not iq.check_connect():
             iq.connect()
 
-        # Busca 80 velas para garantir cálculo estável das EMAs 24 e 32
         velas = [converter(v) for v in iq.get_candles(cfg["ativo"], timeframe, 80, time.time())]
         fechadas = velas[:-1]
         if len(fechadas) < 35:
@@ -441,183 +434,445 @@ HTML_PAGE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PadrãoBot - IQ Option Web</title>
+    <title>BOT RLTRADER</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #121212; color: #e0e0e0; margin: 0; padding: 15px; }
-        .container { max-width: 600px; margin: auto; background: #1e1e1e; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        h2 { text-align: center; color: #00e676; margin-top: 0; }
-        label { display: block; margin-top: 12px; font-size: 14px; color: #aaa; }
-        input, select { width: 100%; padding: 10px; margin-top: 5px; border-radius: 6px; border: 1px solid #333; background: #2c2c2c; color: #fff; box-sizing: border-box; font-size: 15px; }
-        .row { display: flex; gap: 10px; }
-        .row > div { flex: 1; }
-        .box-secao { margin-top: 16px; background: #252525; padding: 12px; border-radius: 8px; border: 1px solid #333; }
-        .secao-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
-        .secao-header strong { font-size: 14px; color: #fff; }
-        .acoes-rapidas { display: flex; gap: 6px; }
-        .btn-mini { width: auto; margin-top: 0; padding: 5px 10px; font-size: 12px; border-radius: 5px; background: #333; color: #e0e0e0; font-weight: 600; }
-        .est-card { background: #1c1c1c; border: 1px solid #303030; border-radius: 7px; padding: 10px 12px; margin-bottom: 8px; }
-        .est-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-        .est-check { display: flex; align-items: center; gap: 8px; margin-top: 0; cursor: pointer; color: #fff; font-size: 13.5px; font-weight: 600; }
-        .est-check input[type="checkbox"] { width: auto; margin: 0; cursor: pointer; accent-color: #00e676; }
-        .badge-ema { font-size: 11px; padding: 2px 7px; border-radius: 999px; font-weight: 600; }
-        .badge-sim { background: rgba(0, 230, 118, 0.14); color: #00e676; border: 1px solid rgba(0, 230, 118, 0.35); }
-        .badge-nao { background: rgba(255, 193, 7, 0.14); color: #ffd54f; border: 1px solid rgba(255, 193, 7, 0.35); }
-        .est-sub { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 12.5px; color: #bbb; }
-        .est-sub input[type="number"] { width: 75px; padding: 5px 8px; margin-top: 0; font-size: 13px; }
-        .padroes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
-        .padrao-item { display: flex; align-items: center; gap: 8px; background: #1c1c1c; padding: 8px 10px; border-radius: 6px; border: 1px solid #303030; margin-top: 0; cursor: pointer; color: #e0e0e0; font-size: 13px; }
-        .padrao-item input[type="checkbox"] { width: auto; margin: 0; cursor: pointer; accent-color: #00e676; }
-        button { width: 100%; padding: 14px; margin-top: 20px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
-        .btn-start { background: #00c853; color: #000; }
-        .btn-stop { background: #ff5252; color: #fff; display: none; }
-        .status-box { display: flex; justify-content: space-between; background: #252525; padding: 12px; border-radius: 8px; margin-top: 15px; font-weight: bold; }
-        .logs { background: #000; color: #00e676; font-family: monospace; font-size: 12px; height: 220px; overflow-y: auto; padding: 10px; border-radius: 8px; margin-top: 15px; border: 1px solid #333; }
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #070d19;
+            color: #e2e8f0;
+            margin: 0;
+            padding: 16px;
+            min-height: 100vh;
+        }
+        .container {
+            width: 100%;
+            max-width: 1120px;
+            margin: 0 auto;
+            background: #0d172a;
+            padding: 20px;
+            border-radius: 14px;
+            border: 1px solid #1e3a8a;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65);
+        }
+        h2 {
+            text-align: center;
+            color: #60a5fa;
+            margin: 0 0 18px 0;
+            letter-spacing: 1px;
+            font-size: clamp(20px, 3vw, 26px);
+        }
+        .main-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.95fr);
+            gap: 18px;
+            align-items: start;
+        }
+        .col-left, .col-right {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            min-width: 0;
+        }
+        .panel-box {
+            background: #11203b;
+            padding: 14px;
+            border-radius: 10px;
+            border: 1px solid #1d3557;
+        }
+        label {
+            display: block;
+            margin-top: 10px;
+            font-size: 13px;
+            color: #93c5fd;
+        }
+        .panel-box > label:first-child,
+        .row > div > label:first-child {
+            margin-top: 0;
+        }
+        input, select {
+            width: 100%;
+            padding: 9px 10px;
+            margin-top: 5px;
+            border-radius: 7px;
+            border: 1px solid #1e3a8a;
+            background: #081224;
+            color: #f8fafc;
+            font-size: 14px;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+        .row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 8px;
+        }
+        .gale-inputs {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            margin-top: 5px;
+        }
+        .gale-inputs input {
+            margin-top: 0;
+        }
+        .secao-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .secao-header strong {
+            font-size: 13.5px;
+            color: #dbeafe;
+        }
+        .acoes-rapidas {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .btn-mini {
+            width: auto;
+            margin-top: 0;
+            padding: 5px 10px;
+            font-size: 12px;
+            border-radius: 6px;
+            background: #172554;
+            color: #bfdbfe;
+            border: 1px solid #2563eb;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .btn-mini:hover {
+            background: #1e3a8a;
+        }
+        .est-card {
+            background: #091428;
+            border: 1px solid #1e3a8a;
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+        }
+        .est-card:last-child {
+            margin-bottom: 0;
+        }
+        .est-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .est-check {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 0;
+            cursor: pointer;
+            color: #f1f5f9;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .est-check input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+            cursor: pointer;
+            accent-color: #2563eb;
+        }
+        .badge-ema {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .badge-sim {
+            background: rgba(37, 99, 235, 0.22);
+            color: #93c5fd;
+            border: 1px solid rgba(59, 130, 246, 0.5);
+        }
+        .badge-nao {
+            background: rgba(30, 58, 138, 0.25);
+            color: #cbd5e1;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+        }
+        .est-sub {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #93c5fd;
+            flex-wrap: wrap;
+        }
+        .est-sub input[type="number"] {
+            width: 78px;
+            padding: 5px 8px;
+            margin-top: 0;
+            font-size: 13px;
+        }
+        .padroes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
+            gap: 7px;
+        }
+        .padrao-item {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            background: #091428;
+            padding: 7px 9px;
+            border-radius: 7px;
+            border: 1px solid #1e3a8a;
+            margin-top: 0;
+            cursor: pointer;
+            color: #e2e8f0;
+            font-size: 12.5px;
+        }
+        .padrao-item input[type="checkbox"] {
+            width: auto;
+            margin: 0;
+            cursor: pointer;
+            accent-color: #2563eb;
+            flex-shrink: 0;
+        }
+        button.btn-main {
+            width: 100%;
+            padding: 13px;
+            margin-top: 0;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            letter-spacing: 0.5px;
+        }
+        .btn-start {
+            background: linear-gradient(135deg, #1d4ed8, #1e3a8a);
+            color: #ffffff;
+            border: 1px solid #3b82f6;
+        }
+        .btn-start:hover {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        }
+        .btn-stop {
+            background: #b91c1c;
+            color: #ffffff;
+            display: none;
+            border: 1px solid #ef4444;
+        }
+        .status-box {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+            background: #091428;
+            padding: 12px 14px;
+            border-radius: 8px;
+            border: 1px solid #1e3a8a;
+            font-weight: 700;
+            font-size: 14px;
+            color: #bfdbfe;
+        }
+        .logs {
+            background: #040914;
+            color: #60a5fa;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 12px;
+            height: 280px;
+            overflow-y: auto;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #1e3a8a;
+            line-height: 1.45;
+        }
+        @media (max-width: 860px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+            .logs {
+                height: 210px;
+            }
+        }
+        @media (max-width: 520px) {
+            body {
+                padding: 10px;
+            }
+            .container {
+                padding: 14px;
+            }
+            .row {
+                grid-template-columns: 1fr;
+            }
+            .padroes-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
 <div class="container">
-    <h2>PadrãoBot Web</h2>
+    <h2>BOT RLTRADER</h2>
 
-    <div id="form-config">
-        <label>E-mail IQ Option</label>
-        <input type="email" id="email" placeholder="seu@email.com" required>
+    <div class="main-grid">
+        <div class="col-left" id="form-config">
+            <div class="panel-box">
+                <label>E-mail IQ Option</label>
+                <input type="email" id="email" placeholder="seu@email.com" required>
 
-        <label>Senha IQ Option</label>
-        <input type="password" id="senha" placeholder="********" required>
+                <label>Senha IQ Option</label>
+                <input type="password" id="senha" placeholder="********" required>
 
-        <div class="row">
-            <div>
-                <label>Conta</label>
-                <select id="conta">
-                    <option value="PRACTICE">PRACTICE (Treino)</option>
-                    <option value="REAL">REAL</option>
-                </select>
-            </div>
-            <div>
-                <label>Ativo</label>
-                <input type="text" id="ativo" value="BTCUSD">
-            </div>
-        </div>
-
-        <div class="row">
-            <div>
-                <label>Valor Entrada</label>
-                <input type="number" id="valor" value="2" step="0.5">
-            </div>
-            <div>
-                <label>Timeframe (seg)</label>
-                <select id="timeframe">
-                    <option value="60">1 Minuto (60s)</option>
-                    <option value="300">5 Minutos (300s)</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="row">
-            <div>
-                <label>Stop Win</label>
-                <input type="number" id="stop_win" value="20">
-            </div>
-            <div>
-                <label>Stop Loss</label>
-                <input type="number" id="stop_loss" value="20">
-            </div>
-        </div>
-
-        <div class="row">
-            <div>
-                <label>Usar Martingale?</label>
-                <select id="gale">
-                    <option value="false">Não</option>
-                    <option value="true">Sim</option>
-                </select>
-            </div>
-            <div>
-                <label>Gale Máx / Mult</label>
                 <div class="row">
-                    <input type="number" id="gale_max" value="1">
-                    <input type="number" id="gale_mult" value="2.2" step="0.1">
+                    <div>
+                        <label>Conta</label>
+                        <select id="conta">
+                            <option value="PRACTICE">PRACTICE (Treino)</option>
+                            <option value="REAL">REAL</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Ativo</label>
+                        <input type="text" id="ativo" value="BTCUSD">
+                    </div>
                 </div>
+
+                <div class="row">
+                    <div>
+                        <label>Valor Entrada</label>
+                        <input type="number" id="valor" value="2" step="0.5">
+                    </div>
+                    <div>
+                        <label>Timeframe (seg)</label>
+                        <select id="timeframe">
+                            <option value="60">1 Minuto (60s)</option>
+                            <option value="300">5 Minutos (300s)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div>
+                        <label>Stop Win</label>
+                        <input type="number" id="stop_win" value="20">
+                    </div>
+                    <div>
+                        <label>Stop Loss</label>
+                        <input type="number" id="stop_loss" value="20">
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div>
+                        <label>Usar Martingale?</label>
+                        <select id="gale">
+                            <option value="false">Não</option>
+                            <option value="true">Sim</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Gale Máx / Mult</label>
+                        <div class="gale-inputs">
+                            <input type="number" id="gale_max" value="1">
+                            <input type="number" id="gale_mult" value="2.2" step="0.1">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FILTRO DE MÉDIAS MÓVEIS EMA 24 E EMA 32 -->
+            <div class="panel-box">
+                <div class="secao-header" style="margin-bottom: 0;">
+                    <label class="est-check" style="font-size: 13.5px;">
+                        <input type="checkbox" id="usar_ema_filtro" checked onchange="salvarPreferencias()">
+                        <span>Filtro Alinhamento EMA 24 e EMA 32</span>
+                    </label>
+                    <span class="badge-ema badge-sim">Exceto Est. 5</span>
+                </div>
+                <div style="font-size: 12px; color: #93c5fd; margin-top: 6px;">
+                    Exige EMA 24 &gt; EMA 32 para CALL e EMA 24 &lt; EMA 32 para PUT. Não se aplica à Estratégia 5.
+                </div>
+            </div>
+
+            <!-- ESTRATÉGIAS DE CONJUNTO DE CANDLES -->
+            <div class="panel-box">
+                <div class="secao-header">
+                    <strong>Estratégias de Conjunto de Candles</strong>
+                </div>
+
+                <div class="est-card">
+                    <div class="est-top">
+                        <label class="est-check">
+                            <input type="checkbox" id="est1_ativo" checked onchange="salvarPreferencias()">
+                            <span>ESTRATEGIA 1 - CLASSIFICADOR 5 CANDLES</span>
+                        </label>
+                        <span class="badge-ema badge-sim">Filtro EMA 24/32</span>
+                    </div>
+                </div>
+
+                <div class="est-card">
+                    <div class="est-top">
+                        <label class="est-check">
+                            <input type="checkbox" id="est2_ativo" checked onchange="salvarPreferencias()">
+                            <span>ESTRATEGIA 2 - PADRAO DE REVERSAO</span>
+                        </label>
+                        <span class="badge-ema badge-sim">Filtro EMA 24/32</span>
+                    </div>
+                    <div class="est-sub">
+                        <span>Mínimo de Candles Anteriores (2 a 8):</span>
+                        <input type="number" id="reversao_minimo" min="2" max="8" step="1" value="3" onchange="salvarPreferencias()">
+                    </div>
+                </div>
+
+                <div class="est-card">
+                    <div class="est-top">
+                        <label class="est-check">
+                            <input type="checkbox" id="est5_ativo" checked onchange="salvarPreferencias()">
+                            <span>ESTRATEGIA 5 - MAIOR MENOR MENOR</span>
+                        </label>
+                        <span class="badge-ema badge-nao">Sem Filtro EMA</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PADRÕES DE CANDLE INDIVIDUAIS -->
+            <div class="panel-box">
+                <div class="secao-header">
+                    <strong>Padrões de Candle (<span id="qtd-padroes">15</span> ativos)</strong>
+                    <div class="acoes-rapidas">
+                        <button type="button" class="btn-mini" onclick="marcarTodos(true)">Marcar todos</button>
+                        <button type="button" class="btn-mini" onclick="marcarTodos(false)">Desmarcar todos</button>
+                    </div>
+                </div>
+                <div class="padroes-grid" id="lista-padroes"></div>
             </div>
         </div>
 
-        <!-- FILTRO DE MÉDIAS MÓVEIS EMA 24 E EMA 32 -->
-        <div class="box-secao">
-            <div class="secao-header" style="margin-bottom: 0;">
-                <label class="est-check" style="font-size: 14px;">
-                    <input type="checkbox" id="usar_ema_filtro" checked onchange="salvarPreferencias()">
-                    <span>Filtro Alinhamento EMA 24 e EMA 32</span>
-                </label>
-                <span class="badge-ema badge-sim">Exceto Est. 5</span>
-            </div>
-            <div style="font-size: 12px; color: #aaa; margin-top: 6px;">
-                Exige EMA 24 &gt; EMA 32 para CALL e EMA 24 &lt; EMA 32 para PUT. Não se aplica à Estratégia 5.
-            </div>
-        </div>
+        <div class="col-right">
+            <div class="panel-box">
+                <button type="button" class="btn-main btn-start" id="btn-start" onclick="iniciar()">INICIAR ROBÔ</button>
+                <button type="button" class="btn-main btn-stop" id="btn-stop" onclick="parar()">PARAR ROBÔ</button>
 
-        <!-- ESTRATÉGIAS DE CONJUNTO DE CANDLES -->
-        <div class="box-secao">
-            <div class="secao-header">
-                <strong>Estratégias de Conjunto de Candles</strong>
-            </div>
-
-            <div class="est-card">
-                <div class="est-top">
-                    <label class="est-check">
-                        <input type="checkbox" id="est1_ativo" checked onchange="salvarPreferencias()">
-                        <span>ESTRATEGIA 1 - CLASSIFICADOR 5 CANDLES</span>
-                    </label>
-                    <span class="badge-ema badge-sim">Filtro EMA 24/32</span>
+                <div class="status-box" style="margin-top: 12px;">
+                    <span>Saldo: <span id="saldo">--</span></span>
+                    <span>Lucro: <span id="lucro">0.00</span></span>
                 </div>
             </div>
 
-            <div class="est-card">
-                <div class="est-top">
-                    <label class="est-check">
-                        <input type="checkbox" id="est2_ativo" checked onchange="salvarPreferencias()">
-                        <span>ESTRATEGIA 2 - PADRAO DE REVERSAO</span>
-                    </label>
-                    <span class="badge-ema badge-sim">Filtro EMA 24/32</span>
+            <div class="panel-box">
+                <div class="secao-header">
+                    <strong>Logs do Sistema</strong>
                 </div>
-                <div class="est-sub">
-                    <span>Mínimo de Candles Anteriores (2 a 8):</span>
-                    <input type="number" id="reversao_minimo" min="2" max="8" step="1" value="3" onchange="salvarPreferencias()">
-                </div>
+                <div class="logs" id="logs">Aguardando início...</div>
             </div>
-
-            <div class="est-card" style="margin-bottom: 0;">
-                <div class="est-top">
-                    <label class="est-check">
-                        <input type="checkbox" id="est5_ativo" checked onchange="salvarPreferencias()">
-                        <span>ESTRATEGIA 5 - MAIOR MENOR MENOR</span>
-                    </label>
-                    <span class="badge-ema badge-nao">Sem Filtro EMA</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- PADRÕES DE CANDLE INDIVIDUAIS -->
-        <div class="box-secao">
-            <div class="secao-header">
-                <strong>Padrões de Candle (<span id="qtd-padroes">15</span> ativos)</strong>
-                <div class="acoes-rapidas">
-                    <button type="button" class="btn-mini" onclick="marcarTodos(true)">Marcar todos</button>
-                    <button type="button" class="btn-mini" onclick="marcarTodos(false)">Desmarcar todos</button>
-                </div>
-            </div>
-            <div class="padroes-grid" id="lista-padroes"></div>
         </div>
     </div>
-
-    <button class="btn-start" id="btn-start" onclick="iniciar()">INICIAR ROBÔ</button>
-    <button class="btn-stop" id="btn-stop" onclick="parar()">PARAR ROBÔ</button>
-
-    <div class="status-box">
-        <span>Saldo: <span id="saldo">--</span></span>
-        <span>Lucro: <span id="lucro">0.00</span></span>
-    </div>
-
-    <div class="logs" id="logs">Aguardando início...</div>
 </div>
 
 <script>
