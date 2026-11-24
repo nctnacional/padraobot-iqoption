@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-# -*- coding: utf-8 -*-
 import os
 import time
 import threading
@@ -13,14 +12,47 @@ app = Flask(__name__)
 SESSOES = {}
 
 DIRECAO = {
-    "engulfing_bull": "call", "engulfing_bear": "put",
-    "hammer": "call", "shooting_star": "put",
-    "morning_star": "call", "evening_star": "put",
-    "three_soldiers": "call", "three_crows": "put",
-    "double_bottom": "call", "double_top": "put",
+    # Padrões individuais de candle (15)
+    "engulfing_bull": "call",
+    "engulfing_bear": "put",
+    "hammer": "call",
+    "shooting_star": "put",
+    "morning_star": "call",
+    "evening_star": "put",
+    "three_soldiers": "call",
+    "three_crows": "put",
+    "double_bottom": "call",
+    "double_top": "put",
+    "doji_bull": "call",
+    "doji_bear": "put",
+    "marubozu_bull": "call",
+    "marubozu_bear": "put",
+    "tweezer_bottom": "call",
+    # Conjuntos de candles / Estratégias
+    "estrategia_1_5candles": "auto",
+    "estrategia_2_reversao": "auto",
+    "estrategia_5_m3": "auto",
 }
 
-# ---------------- LÓGICA DE PADRÕES ----------------
+NOMES_ITENS = {
+    "engulfing_bull": "Engolfo de Alta (CALL)",
+    "engulfing_bear": "Engolfo de Baixa (PUT)",
+    "hammer": "Martelo (CALL)",
+    "shooting_star": "Estrela Cadente (PUT)",
+    "morning_star": "Estrela da Manhã (CALL)",
+    "evening_star": "Estrela da Noite (PUT)",
+    "three_soldiers": "Três Soldados (CALL)",
+    "three_crows": "Três Corvos (PUT)",
+    "double_bottom": "Fundo Duplo (CALL)",
+    "double_top": "Topo Duplo (PUT)",
+    "doji_bull": "Doji de Alta (CALL)",
+    "doji_bear": "Doji de Baixa (PUT)",
+    "marubozu_bull": "Marubozu de Alta (CALL)",
+    "marubozu_bear": "Marubozu de Baixa (PUT)",
+    "tweezer_bottom": "Pinça de Fundo (CALL)",
+}
+
+# ---------------- FUNÇÕES AUXILIARES & EMAs ----------------
 def corpo(c): return abs(c["close"] - c["open"])
 def faixa(c): return c["high"] - c["low"]
 def pavio_sup(c): return c["high"] - max(c["open"], c["close"])
@@ -37,6 +69,36 @@ def media_faixa(cs, n=14):
     s = cs[-n:]
     return sum(faixa(c) for c in s) / len(s) if s else 0
 
+def calcular_ema_serie(valores, periodo):
+    if not valores or len(valores) < periodo:
+        return []
+    k = 2 / (periodo + 1)
+    ema = sum(valores[:periodo]) / periodo
+    serie = [None] * (periodo - 1) + [ema]
+    for preco in valores[periodo:]:
+        ema = (preco * k) + (ema * (1 - k))
+        serie.append(ema)
+    return serie
+
+def emas_alinhadas(cs, direcao):
+    """Verifica se EMA 24 e EMA 32 estão alinhadas na direção do sinal."""
+    closes = [c["close"] for c in cs]
+    ema24_s = calcular_ema_serie(closes, 24)
+    ema32_s = calcular_ema_serie(closes, 32)
+    if not ema24_s or not ema32_s:
+        return False
+    e24 = ema24_s[-1]
+    e32 = ema32_s[-1]
+    if e24 is None or e32 is None:
+        return False
+    ultimo_close = closes[-1]
+    if direcao == "call":
+        return e24 > e32 and ultimo_close >= e24
+    if direcao == "put":
+        return e24 < e32 and ultimo_close <= e24
+    return False
+
+# ---------------- PADRÕES INDIVIDUAIS ----------------
 def engulfing_bull(cs):
     p, c = cs[-2], cs[-1]
     return baixa(p) and alta(c) and c["open"] <= p["close"] and c["close"] >= p["open"] and corpo(c) > corpo(p)
@@ -119,20 +181,149 @@ def double_bottom(cs):
     if any(x["low"] < max(A["low"], B["low"]) for x in meio_): return False
     return cs[-2]["close"] <= pescoco and cs[-1]["close"] > pescoco
 
-DETECTORES = {
-    "engulfing_bull": engulfing_bull, "engulfing_bear": engulfing_bear,
-    "hammer": hammer, "shooting_star": shooting_star,
-    "morning_star": morning_star, "evening_star": evening_star,
-    "three_soldiers": three_soldiers, "three_crows": three_crows,
-    "double_bottom": double_bottom, "double_top": double_top,
+def doji_bull(cs):
+    p, c = cs[-2], cs[-1]
+    r = faixa(c)
+    if r <= 0: return False
+    return baixa(p) and corpo(c) <= 0.1 * r and pavio_inf(c) >= 0.3 * r
+
+def doji_bear(cs):
+    p, c = cs[-2], cs[-1]
+    r = faixa(c)
+    if r <= 0: return False
+    return alta(p) and corpo(c) <= 0.1 * r and pavio_sup(c) >= 0.3 * r
+
+def marubozu_bull(cs):
+    c = cs[-1]
+    r = faixa(c)
+    if r <= 0: return False
+    return alta(c) and corpo(c) >= 0.8 * r and pavio_sup(c) <= 0.1 * r and pavio_inf(c) <= 0.1 * r
+
+def marubozu_bear(cs):
+    c = cs[-1]
+    r = faixa(c)
+    if r <= 0: return False
+    return baixa(c) and corpo(c) >= 0.8 * r and pavio_sup(c) <= 0.1 * r and pavio_inf(c) <= 0.1 * r
+
+def tweezer_bottom(cs):
+    p, c = cs[-2], cs[-1]
+    mf = media_faixa(cs) or faixa(c)
+    if mf <= 0: return False
+    return baixa(p) and alta(c) and abs(p["low"] - c["low"]) <= 0.15 * mf
+
+DETECTORES_INDIVIDUAIS = {
+    "engulfing_bull": engulfing_bull,
+    "engulfing_bear": engulfing_bear,
+    "hammer": hammer,
+    "shooting_star": shooting_star,
+    "morning_star": morning_star,
+    "evening_star": evening_star,
+    "three_soldiers": three_soldiers,
+    "three_crows": three_crows,
+    "double_bottom": double_bottom,
+    "double_top": double_top,
+    "doji_bull": doji_bull,
+    "doji_bear": doji_bear,
+    "marubozu_bull": marubozu_bull,
+    "marubozu_bear": marubozu_bear,
+    "tweezer_bottom": tweezer_bottom,
 }
 
-def detectar(cs, padroes):
-    achados = [p for p in padroes if DETECTORES[p](cs)]
-    direcoes = {DIRECAO[p] for p in achados}
+# ---------------- ESTRATÉGIAS DE CONJUNTO DE CANDLES ----------------
+def sinal_estrategia_1_5candles(cs):
+    """Estratégia 1: Classificador de 5 candles (retorna 'call', 'put' ou None)."""
+    if len(cs) < 5:
+        return None
+    janela = cs[-5:]
+    altas = sum(1 for c in janela if alta(c))
+    baixas = sum(1 for c in janela if baixa(c))
+    if altas > baixas and altas >= 3:
+        return "call"
+    if baixas > altas and baixas >= 3:
+        return "put"
+    return None
+
+def sinal_estrategia_2_reversao(cs, minimo=3):
+    """Estratégia 2: Reversão após N candles consecutivos anteriores."""
+    minimo = max(2, min(8, int(minimo)))
+    if len(cs) < minimo + 1:
+        return None
+    anteriores = cs[-(minimo + 1):-1]
+    atual = cs[-1]
+    if all(baixa(c) for c in anteriores) and alta(atual):
+        return "call"
+    if all(alta(c) for c in anteriores) and baixa(atual):
+        return "put"
+    return None
+
+def sinal_estrategia_5_m3(cs):
+    """Estratégia 5: Maior Menor Menor medindo apenas abertura e fechamento (sem filtro EMA)."""
+    if len(cs) < 3:
+        return None
+    a, b, c = cs[-3], cs[-2], cs[-1]
+    # Maior no fechamento do meio em relação ao anterior e menor no fechamento seguinte -> PUT
+    if b["close"] > a["close"] and c["close"] < b["close"] and baixa(c):
+        return "put"
+    # Menor no fechamento do meio em relação ao anterior e maior no fechamento seguinte -> CALL
+    if b["close"] < a["close"] and c["close"] > b["close"] and alta(c):
+        return "call"
+    return None
+
+def avaliar_sinais(cs, cfg, log_fn=None):
+    usar_ema = bool(cfg.get("usar_ema_filtro", True))
+    minimo_rev = int(cfg.get("reversao_minimo", 3))
+    padroes_sel = cfg.get("padroes", [])
+    e1_ativo = bool(cfg.get("est1_ativo", True))
+    e2_ativo = bool(cfg.get("est2_ativo", True))
+    e5_ativo = bool(cfg.get("est5_ativo", True))
+
+    sinais_validos = []
+
+    # 1. Padrões individuais selecionados
+    for p in padroes_sel:
+        if p in DETECTORES_INDIVIDUAIS and DETECTORES_INDIVIDUAIS[p](cs):
+            dir_p = DIRECAO[p]
+            if usar_ema and not emas_alinhadas(cs, dir_p):
+                if log_fn:
+                    log_fn(f"Sinal {NOMES_ITENS.get(p, p)} ({dir_p.upper()}) filtrado por EMA 24/32.")
+                continue
+            sinais_validos.append((p, dir_p))
+
+    # 2. Estratégia 1 - Classificador 5 Candles (usa filtro EMA 24/32 se ativado)
+    if e1_ativo:
+        d1 = sinal_estrategia_1_5candles(cs)
+        if d1:
+            if usar_ema and not emas_alinhadas(cs, d1):
+                if log_fn:
+                    log_fn(f"Est. 1 - 5 Candles ({d1.upper()}) filtrado por EMA 24/32.")
+            else:
+                sinais_validos.append(("Est. 1 (5 Candles)", d1))
+
+    # 3. Estratégia 2 - Padrão de Reversão (usa filtro EMA 24/32 se ativado)
+    if e2_ativo:
+        d2 = sinal_estrategia_2_reversao(cs, minimo_rev)
+        if d2:
+            if usar_ema and not emas_alinhadas(cs, d2):
+                if log_fn:
+                    log_fn(f"Est. 2 - Reversão [{minimo_rev}] ({d2.upper()}) filtrado por EMA 24/32.")
+            else:
+                sinais_validos.append((f"Est. 2 (Reversão {minimo_rev})", d2))
+
+    # 4. Estratégia 5 - Maior Menor Menor (NÃO usa filtro EMA 24/32)
+    if e5_ativo:
+        d5 = sinal_estrategia_5_m3(cs)
+        if d5:
+            sinais_validos.append(("Est. 5 (Maior Menor Menor)", d5))
+
+    if not sinais_validos:
+        return None, []
+
+    nomes_achados = [nome for nome, _ in sinais_validos]
+    direcoes = {d for _, d in sinais_validos}
     if len(direcoes) != 1:
-        return None, achados
-    return direcoes.pop(), achados
+        return None, nomes_achados
+
+    return direcoes.pop(), nomes_achados
 
 def converter(v):
     return {"time": v["from"], "open": v["open"], "close": v["close"], "high": v["max"], "low": v["min"]}
@@ -142,13 +333,12 @@ def log_msg(sessao_id, texto):
     if sessao_id in SESSOES:
         hora = time.strftime("%H:%M:%S")
         SESSOES[sessao_id]["logs"].append(f"[{hora}] {texto}")
-        # Mantém apenas as últimas 50 linhas
         SESSOES[sessao_id]["logs"] = SESSOES[sessao_id]["logs"][-50:]
 
 def rodar_robo(sessao_id, cfg):
     sessao = SESSOES[sessao_id]
     log_msg(sessao_id, "Conectando à IQ Option...")
-    
+
     iq = IQ_Option(cfg["email"], cfg["senha"])
     ok, motivo = iq.connect()
     if not ok:
@@ -161,32 +351,48 @@ def rodar_robo(sessao_id, cfg):
     sessao["saldo"] = saldo
     log_msg(sessao_id, f"Conectado! Conta: {cfg['conta']} | Saldo: {saldo} | Ativo: {cfg['ativo']}")
 
+    padroes_ativos = [p for p in cfg.get("padroes", []) if p in DETECTORES_INDIVIDUAIS]
+    e1_ativo = bool(cfg.get("est1_ativo", True))
+    e2_ativo = bool(cfg.get("est2_ativo", True))
+    e5_ativo = bool(cfg.get("est5_ativo", True))
+
+    if not padroes_ativos and not (e1_ativo or e2_ativo or e5_ativo):
+        log_msg(sessao_id, "Nenhuma estratégia ou padrão ativado! Marque ao menos uma opção.")
+        sessao["rodando"] = False
+        return
+
+    filtro_txt = "ON (EMA 24/32)" if cfg.get("usar_ema_filtro", True) else "OFF"
+    log_msg(sessao_id, f"Filtro EMA 24/32: {filtro_txt} | Padrões: {len(padroes_ativos)} | Est1:{e1_ativo} Est2:{e2_ativo} Est5:{e5_ativo}")
+
     timeframe = int(cfg["timeframe"])
     expiracao_min = max(1, (timeframe // 60) * int(cfg["expiracao_velas"]))
-    padroes = list(DETECTORES.keys())
 
     while sessao["rodando"]:
         agora = iq.get_server_timestamp()
         espera = timeframe - (agora % timeframe) + 1
-        
-        # Espera fracionada para permitir parar o robô rapidamente
+
         for _ in range(int(espera)):
             if not sessao["rodando"]:
                 break
             time.sleep(1)
-            
+
         if not sessao["rodando"]:
             break
 
         if not iq.check_connect():
             iq.connect()
 
-        velas = [converter(v) for v in iq.get_candles(cfg["ativo"], timeframe, 60, time.time())]
+        # Busca 80 velas para garantir cálculo estável das EMAs 24 e 32
+        velas = [converter(v) for v in iq.get_candles(cfg["ativo"], timeframe, 80, time.time())]
         fechadas = velas[:-1]
-        if len(fechadas) < 10:
+        if len(fechadas) < 35:
             continue
 
-        direcao, achados = detectar(fechadas, padroes)
+        direcao, achados = avaliar_sinais(
+            fechadas,
+            cfg,
+            log_fn=lambda msg: log_msg(sessao_id, msg)
+        )
         if not achados:
             continue
         if direcao is None:
@@ -205,12 +411,12 @@ def rodar_robo(sessao_id, cfg):
             if not ok:
                 log_msg(sessao_id, f"Ordem recusada: {ordem}")
                 break
-            
+
             resultado = iq.check_win_v3(ordem)
             sessao["lucro"] = round(sessao["lucro"] + resultado, 2)
             sessao["saldo"] = iq.get_balance()
             log_msg(sessao_id, f"Resultado: {round(resultado, 2)} | Lucro sessão: {sessao['lucro']}")
-            
+
             if resultado >= 0:
                 break
             valor = round(valor * gale_mult, 2)
@@ -238,12 +444,29 @@ HTML_PAGE = """
     <title>PadrãoBot - IQ Option Web</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #121212; color: #e0e0e0; margin: 0; padding: 15px; }
-        .container { max-width: 500px; margin: auto; background: #1e1e1e; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        .container { max-width: 600px; margin: auto; background: #1e1e1e; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
         h2 { text-align: center; color: #00e676; margin-top: 0; }
         label { display: block; margin-top: 12px; font-size: 14px; color: #aaa; }
-        input, select { width: 100%; padding: 10px; margin-top: 5px; border-radius: 6px; border: 1px solid #333; background: #2c2c2c; color: #fff; box-sizing: border-box; font-size: 16px; }
+        input, select { width: 100%; padding: 10px; margin-top: 5px; border-radius: 6px; border: 1px solid #333; background: #2c2c2c; color: #fff; box-sizing: border-box; font-size: 15px; }
         .row { display: flex; gap: 10px; }
         .row > div { flex: 1; }
+        .box-secao { margin-top: 16px; background: #252525; padding: 12px; border-radius: 8px; border: 1px solid #333; }
+        .secao-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
+        .secao-header strong { font-size: 14px; color: #fff; }
+        .acoes-rapidas { display: flex; gap: 6px; }
+        .btn-mini { width: auto; margin-top: 0; padding: 5px 10px; font-size: 12px; border-radius: 5px; background: #333; color: #e0e0e0; font-weight: 600; }
+        .est-card { background: #1c1c1c; border: 1px solid #303030; border-radius: 7px; padding: 10px 12px; margin-bottom: 8px; }
+        .est-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .est-check { display: flex; align-items: center; gap: 8px; margin-top: 0; cursor: pointer; color: #fff; font-size: 13.5px; font-weight: 600; }
+        .est-check input[type="checkbox"] { width: auto; margin: 0; cursor: pointer; accent-color: #00e676; }
+        .badge-ema { font-size: 11px; padding: 2px 7px; border-radius: 999px; font-weight: 600; }
+        .badge-sim { background: rgba(0, 230, 118, 0.14); color: #00e676; border: 1px solid rgba(0, 230, 118, 0.35); }
+        .badge-nao { background: rgba(255, 193, 7, 0.14); color: #ffd54f; border: 1px solid rgba(255, 193, 7, 0.35); }
+        .est-sub { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 12.5px; color: #bbb; }
+        .est-sub input[type="number"] { width: 75px; padding: 5px 8px; margin-top: 0; font-size: 13px; }
+        .padroes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+        .padrao-item { display: flex; align-items: center; gap: 8px; background: #1c1c1c; padding: 8px 10px; border-radius: 6px; border: 1px solid #303030; margin-top: 0; cursor: pointer; color: #e0e0e0; font-size: 13px; }
+        .padrao-item input[type="checkbox"] { width: auto; margin: 0; cursor: pointer; accent-color: #00e676; }
         button { width: 100%; padding: 14px; margin-top: 20px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
         .btn-start { background: #00c853; color: #000; }
         .btn-stop { background: #ff5252; color: #fff; display: none; }
@@ -254,11 +477,11 @@ HTML_PAGE = """
 <body>
 <div class="container">
     <h2>PadrãoBot Web</h2>
-    
+
     <div id="form-config">
         <label>E-mail IQ Option</label>
         <input type="email" id="email" placeholder="seu@email.com" required>
-        
+
         <label>Senha IQ Option</label>
         <input type="password" id="senha" placeholder="********" required>
 
@@ -317,6 +540,73 @@ HTML_PAGE = """
                 </div>
             </div>
         </div>
+
+        <!-- FILTRO DE MÉDIAS MÓVEIS EMA 24 E EMA 32 -->
+        <div class="box-secao">
+            <div class="secao-header" style="margin-bottom: 0;">
+                <label class="est-check" style="font-size: 14px;">
+                    <input type="checkbox" id="usar_ema_filtro" checked onchange="salvarPreferencias()">
+                    <span>Filtro Alinhamento EMA 24 e EMA 32</span>
+                </label>
+                <span class="badge-ema badge-sim">Exceto Est. 5</span>
+            </div>
+            <div style="font-size: 12px; color: #aaa; margin-top: 6px;">
+                Exige EMA 24 &gt; EMA 32 para CALL e EMA 24 &lt; EMA 32 para PUT. Não se aplica à Estratégia 5.
+            </div>
+        </div>
+
+        <!-- ESTRATÉGIAS DE CONJUNTO DE CANDLES -->
+        <div class="box-secao">
+            <div class="secao-header">
+                <strong>Estratégias de Conjunto de Candles</strong>
+            </div>
+
+            <div class="est-card">
+                <div class="est-top">
+                    <label class="est-check">
+                        <input type="checkbox" id="est1_ativo" checked onchange="salvarPreferencias()">
+                        <span>ESTRATEGIA 1 - CLASSIFICADOR 5 CANDLES</span>
+                    </label>
+                    <span class="badge-ema badge-sim">Filtro EMA 24/32</span>
+                </div>
+            </div>
+
+            <div class="est-card">
+                <div class="est-top">
+                    <label class="est-check">
+                        <input type="checkbox" id="est2_ativo" checked onchange="salvarPreferencias()">
+                        <span>ESTRATEGIA 2 - PADRAO DE REVERSAO</span>
+                    </label>
+                    <span class="badge-ema badge-sim">Filtro EMA 24/32</span>
+                </div>
+                <div class="est-sub">
+                    <span>Mínimo de Candles Anteriores (2 a 8):</span>
+                    <input type="number" id="reversao_minimo" min="2" max="8" step="1" value="3" onchange="salvarPreferencias()">
+                </div>
+            </div>
+
+            <div class="est-card" style="margin-bottom: 0;">
+                <div class="est-top">
+                    <label class="est-check">
+                        <input type="checkbox" id="est5_ativo" checked onchange="salvarPreferencias()">
+                        <span>ESTRATEGIA 5 - MAIOR MENOR MENOR</span>
+                    </label>
+                    <span class="badge-ema badge-nao">Sem Filtro EMA</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- PADRÕES DE CANDLE INDIVIDUAIS -->
+        <div class="box-secao">
+            <div class="secao-header">
+                <strong>Padrões de Candle (<span id="qtd-padroes">15</span> ativos)</strong>
+                <div class="acoes-rapidas">
+                    <button type="button" class="btn-mini" onclick="marcarTodos(true)">Marcar todos</button>
+                    <button type="button" class="btn-mini" onclick="marcarTodos(false)">Desmarcar todos</button>
+                </div>
+            </div>
+            <div class="padroes-grid" id="lista-padroes"></div>
+        </div>
     </div>
 
     <button class="btn-start" id="btn-start" onclick="iniciar()">INICIAR ROBÔ</button>
@@ -331,10 +621,106 @@ HTML_PAGE = """
 </div>
 
 <script>
+    const PADROES_INFO = [
+        ["engulfing_bull", "Engolfo de Alta (CALL)"],
+        ["engulfing_bear", "Engolfo de Baixa (PUT)"],
+        ["hammer", "Martelo (CALL)"],
+        ["shooting_star", "Estrela Cadente (PUT)"],
+        ["morning_star", "Estrela da Manhã (CALL)"],
+        ["evening_star", "Estrela da Noite (PUT)"],
+        ["three_soldiers", "Três Soldados (CALL)"],
+        ["three_crows", "Três Corvos (PUT)"],
+        ["double_bottom", "Fundo Duplo (CALL)"],
+        ["double_top", "Topo Duplo (PUT)"],
+        ["doji_bull", "Doji de Alta (CALL)"],
+        ["doji_bear", "Doji de Baixa (PUT)"],
+        ["marubozu_bull", "Marubozu de Alta (CALL)"],
+        ["marubozu_bear", "Marubozu de Baixa (PUT)"],
+        ["tweezer_bottom", "Pinça de Fundo (CALL)"]
+    ];
+
     let sessaoId = localStorage.getItem("sessao_id") || null;
     let intervalo = null;
 
+    function renderizarPadroes() {
+        const container = document.getElementById("lista-padroes");
+        const salvos = JSON.parse(localStorage.getItem("padroes_ativos") || "null");
+
+        container.innerHTML = PADROES_INFO.map(([id, nome]) => {
+            const checked = salvos ? salvos.includes(id) : true;
+            return `
+                <label class="padrao-item">
+                    <input type="checkbox" class="chk-padrao" value="${id}" ${checked ? "checked" : ""} onchange="salvarPreferencias()">
+                    <span>${nome}</span>
+                </label>
+            `;
+        }).join("");
+        carregarEstrategiasSalvas();
+        atualizarContagem();
+    }
+
+    function carregarEstrategiasSalvas() {
+        const cfgSalva = JSON.parse(localStorage.getItem("estrategias_cfg") || "null");
+        if (!cfgSalva) return;
+        if (typeof cfgSalva.usar_ema_filtro === "boolean") {
+            document.getElementById("usar_ema_filtro").checked = cfgSalva.usar_ema_filtro;
+        }
+        if (typeof cfgSalva.est1_ativo === "boolean") {
+            document.getElementById("est1_ativo").checked = cfgSalva.est1_ativo;
+        }
+        if (typeof cfgSalva.est2_ativo === "boolean") {
+            document.getElementById("est2_ativo").checked = cfgSalva.est2_ativo;
+        }
+        if (typeof cfgSalva.est5_ativo === "boolean") {
+            document.getElementById("est5_ativo").checked = cfgSalva.est5_ativo;
+        }
+        if (cfgSalva.reversao_minimo) {
+            document.getElementById("reversao_minimo").value = cfgSalva.reversao_minimo;
+        }
+    }
+
+    function obterPadroesSelecionados() {
+        return Array.from(document.querySelectorAll(".chk-padrao:checked")).map(el => el.value);
+    }
+
+    function salvarPreferencias() {
+        const selecionados = obterPadroesSelecionados();
+        localStorage.setItem("padroes_ativos", JSON.stringify(selecionados));
+
+        let minRev = parseInt(document.getElementById("reversao_minimo").value || "3", 10);
+        if (minRev < 2) minRev = 2;
+        if (minRev > 8) minRev = 8;
+        document.getElementById("reversao_minimo").value = minRev;
+
+        localStorage.setItem("estrategias_cfg", JSON.stringify({
+            usar_ema_filtro: document.getElementById("usar_ema_filtro").checked,
+            est1_ativo: document.getElementById("est1_ativo").checked,
+            est2_ativo: document.getElementById("est2_ativo").checked,
+            est5_ativo: document.getElementById("est5_ativo").checked,
+            reversao_minimo: minRev
+        }));
+
+        atualizarContagem();
+    }
+
+    function atualizarContagem() {
+        document.getElementById("qtd-padroes").innerText = obterPadroesSelecionados().length;
+    }
+
+    function marcarTodos(marcar) {
+        document.querySelectorAll(".chk-padrao").forEach(el => {
+            el.checked = marcar;
+        });
+        salvarPreferencias();
+    }
+
     async function iniciar() {
+        salvarPreferencias();
+        const padroes = obterPadroesSelecionados();
+        const est1 = document.getElementById("est1_ativo").checked;
+        const est2 = document.getElementById("est2_ativo").checked;
+        const est5 = document.getElementById("est5_ativo").checked;
+
         const payload = {
             email: document.getElementById("email").value,
             senha: document.getElementById("senha").value,
@@ -347,11 +733,21 @@ HTML_PAGE = """
             stop_loss: document.getElementById("stop_loss").value,
             gale: document.getElementById("gale").value === "true",
             gale_max: document.getElementById("gale_max").value,
-            gale_mult: document.getElementById("gale_mult").value
+            gale_mult: document.getElementById("gale_mult").value,
+            usar_ema_filtro: document.getElementById("usar_ema_filtro").checked,
+            est1_ativo: est1,
+            est2_ativo: est2,
+            est5_ativo: est5,
+            reversao_minimo: document.getElementById("reversao_minimo").value,
+            padroes: padroes
         };
 
         if (!payload.email || !payload.senha) {
             alert("Preencha e-mail e senha!");
+            return;
+        }
+        if (padroes.length === 0 && !est1 && !est2 && !est5) {
+            alert("Ative pelo menos um padrão ou estratégia de conjunto de candles!");
             return;
         }
 
@@ -363,7 +759,7 @@ HTML_PAGE = """
         const data = await res.json();
         sessaoId = data.sessao_id;
         localStorage.setItem("sessao_id", sessaoId);
-        
+
         alternarBotoes(true);
         iniciarMonitoramento();
     }
@@ -390,10 +786,10 @@ HTML_PAGE = """
             const res = await fetch(`/status?sessao_id=${sessaoId}`);
             if (!res.ok) return;
             const data = await res.json();
-            
+
             document.getElementById("saldo").innerText = data.saldo;
             document.getElementById("lucro").innerText = data.lucro;
-            
+
             const logDiv = document.getElementById("logs");
             logDiv.innerHTML = data.logs.join("<br>");
             logDiv.scrollTop = logDiv.scrollHeight;
@@ -405,6 +801,7 @@ HTML_PAGE = """
         }, 2000);
     }
 
+    renderizarPadroes();
     if (sessaoId) {
         iniciarMonitoramento();
     }
