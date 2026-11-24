@@ -11,6 +11,17 @@ app = Flask(__name__)
 # Armazena as sessões ativas de cada usuário (multi-usuário)
 SESSOES = {}
 
+ATIVOS_PADRAO_FALLBACK = [
+    {"symbol": "EURUSD-OTC", "mercados": ["BINARIA", "DIGITAL"]},
+    {"symbol": "GBPUSD-OTC", "mercados": ["BINARIA", "DIGITAL"]},
+    {"symbol": "USDJPY-OTC", "mercados": ["BINARIA", "DIGITAL"]},
+    {"symbol": "AUDUSD-OTC", "mercados": ["BINARIA", "DIGITAL"]},
+    {"symbol": "EURGBP-OTC", "mercados": ["BINARIA"]},
+    {"symbol": "BTCUSD-OTC", "mercados": ["BINARIA", "DIGITAL"]},
+    {"symbol": "EURUSD", "mercados": ["BINARIA", "DIGITAL"]},
+    {"symbol": "GBPUSD", "mercados": ["BINARIA", "DIGITAL"]},
+]
+
 DIRECAO = {
     # Padrões individuais de candle (15)
     "engulfing_bull": "call",
@@ -284,7 +295,7 @@ def avaliar_sinais(cs, cfg, log_fn=None):
                 if log_fn:
                     log_fn(f"Sinal {NOMES_ITENS.get(p, p)} ({dir_p.upper()}) filtrado por EMA 24/32.")
                 continue
-            sinais_validos.append((p, dir_p))
+            sinais_validos.append((NOMES_ITENS.get(p, p), dir_p))
 
     if e1_ativo:
         d1 = sinal_estrategia_1_5candles(cs)
@@ -312,22 +323,91 @@ def avaliar_sinais(cs, cfg, log_fn=None):
     if not sinais_validos:
         return None, []
 
-    nomes_achados = [nome for nome, _ in sinais_validos]
-    direcoes = {d for _, d in sinais_validos}
-    if len(direcoes) != 1:
-        return None, nomes_achados
+    calls = [nome for nome, d in sinais_validos if d == "call"]
+    puts = [nome for nome, d in sinais_validos if d == "put"]
 
-    return direcoes.pop(), nomes_achados
+    if len(calls) > len(puts):
+        return "call", calls
+    if len(puts) > len(calls):
+        return "put", puts
+
+    ultimo_nome, ultima_dir = sinais_validos[-1]
+    return ultima_dir, [ultimo_nome]
 
 def converter(v):
     return {"time": v["from"], "open": v["open"], "close": v["close"], "high": v["max"], "low": v["min"]}
+
+def listar_ativos_abertos_iq(email, senha):
+    """Consulta os ativos abertos em Binárias/Turbo e Digital na IQ Option."""
+    iq = IQ_Option(email, senha)
+    ok, motivo = iq.connect()
+    if not ok:
+        return False, f"Falha ao conectar: {motivo}", []
+
+    try:
+        abertos = iq.get_all_open_time()
+    except Exception as e:
+        return False, f"Erro ao consultar ativos: {e}", []
+
+    mapa = {}
+    grupos = [
+        ("turbo", "BINARIA"),
+        ("binary", "BINARIA"),
+        ("digital", "DIGITAL"),
+    ]
+    for chave_api, rotulo in grupos:
+        itens = abertos.get(chave_api, {})
+        if not isinstance(itens, dict):
+            continue
+        for simbolo, dados in itens.items():
+            if isinstance(dados, dict) and dados.get("open"):
+                sym = str(simbolo).strip().upper()
+                if not sym:
+                    continue
+                if sym not in mapa:
+                    mapa[sym] = []
+                if rotulo not in mapa[sym]:
+                    mapa[sym].append(rotulo)
+
+    ativos_ordenados = sorted(
+        mapa.keys(),
+        key=lambda s: (0 if "-OTC" in s else 1, s)
+    )
+    lista_final = [{"symbol": sym, "mercados": mapa[sym]} for sym in ativos_ordenados[:60]]
+    if not lista_final:
+        return True, "Nenhum ativo aberto retornado pela API; exibindo lista padrão.", ATIVOS_PADRAO_FALLBACK
+    return True, f"{len(lista_final)} ativos abertos carregados.", lista_final
+
+def enviar_ordem_iq(iq, valor, ativo, direcao, expiracao_min, log_fn):
+    """Tenta executar em Binárias; se recusado, tenta automaticamente em Digital."""
+    ok, ordem = iq.buy(valor, ativo, direcao, expiracao_min)
+    if ok:
+        return True, ordem, "BINARIA"
+
+    log_fn(f"[{ativo}] Binária indisponível ({ordem}). Tentando Digital...")
+    try:
+        ok_dig, ordem_dig = iq.buy_digital_spot_v2(ativo, valor, direcao, expiracao_min)
+        if ok_dig:
+            return True, ordem_dig, "DIGITAL"
+        return False, f"Binária: {ordem} | Digital: {ordem_dig}", "NONE"
+    except Exception as e:
+        return False, f"Binária: {ordem} | Digital erro: {e}", "NONE"
+
+def aguardar_resultado_iq(iq, ordem, modalidade):
+    if modalidade == "DIGITAL":
+        while True:
+            check, lucro = iq.check_win_digital_v2(ordem)
+            if check:
+                return float(lucro)
+            time.sleep(1)
+    return float(iq.check_win_v3(ordem))
 
 # ---------------- EXECUÇÃO DO ROBÔ EM THREAD ----------------
 def log_msg(sessao_id, texto):
     if sessao_id in SESSOES:
         hora = time.strftime("%H:%M:%S")
         SESSOES[sessao_id]["logs"].append(f"[{hora}] {texto}")
-        SESSOES[sessao_id]["logs"] = SESSOES[sessao_id]["logs"][-50:]
+        SESSOES[sessao_id]["logs"] = SESSOES[sessao_id]["logs"][-80:]
 
 def rodar_robo(sessao_id, cfg):
     sessao = SESSOES[sessao_id]
@@ -343,7 +423,20 @@ def rodar_robo(sessao_id, cfg):
     iq.change_balance(cfg["conta"])
     saldo = iq.get_balance()
     sessao["saldo"] = saldo
-    log_msg(sessao_id, f"Conectado! Conta: {cfg['conta']} | Saldo: {saldo} | Ativo: {cfg['ativo']}")
+
+    ativos_sel = [str(a).strip().upper() for a in cfg.get("ativos", []) if str(a).strip()]
+    if not ativos_sel and cfg.get("ativo"):
+        ativos_sel = [str(cfg["ativo"]).strip().upper()]
+    ativos_sel = ativos_sel[:3]
+
+    if not ativos_sel:
+        log_msg(sessao_id, "Selecione de 1 a 3 ativos antes de iniciar.")
+        sessao["rodando"] = False
+        return
+
+    limitar_uma_entrada = bool(cfg.get("limitar_uma_entrada_vela", True))
+    log_msg(sessao_id, f"Conectado! Conta: {cfg['conta']} | Saldo: {saldo} | Ativos ({len(ativos_sel)}): {', '.join(ativos_sel)}")
+    log_msg(sessao_id, f"Limite 1 entrada/vela: {'ON' if limitar_uma_entrada else 'OFF'}")
 
     padroes_ativos = [p for p in cfg.get("padroes", []) if p in DETECTORES_INDIVIDUAIS]
     e1_ativo = bool(cfg.get("est1_ativo", True))
@@ -360,10 +453,12 @@ def rodar_robo(sessao_id, cfg):
 
     timeframe = int(cfg["timeframe"])
     expiracao_min = max(1, (timeframe // 60) * int(cfg["expiracao_velas"]))
+    ultimo_ts_por_ativo = {}
 
     while sessao["rodando"]:
         agora = iq.get_server_timestamp()
         espera = timeframe - (agora % timeframe) + 1
+        log_msg(sessao_id, f"Aguardando fechamento da vela ({int(espera)}s)...")
 
         for _ in range(int(espera)):
             if not sessao["rodando"]:
@@ -374,56 +469,89 @@ def rodar_robo(sessao_id, cfg):
             break
 
         if not iq.check_connect():
+            log_msg(sessao_id, "Reconectando à IQ Option...")
             iq.connect()
+            iq.change_balance(cfg["conta"])
 
-        velas = [converter(v) for v in iq.get_candles(cfg["ativo"], timeframe, 80, time.time())]
-        fechadas = velas[:-1]
-        if len(fechadas) < 35:
-            continue
+        entrada_executada_nesta_vela = False
 
-        direcao, achados = avaliar_sinais(
-            fechadas,
-            cfg,
-            log_fn=lambda msg: log_msg(sessao_id, msg)
-        )
-        if not achados:
-            continue
-        if direcao is None:
-            log_msg(sessao_id, f"Sinais em conflito ignorados: {', '.join(achados)}")
-            continue
-
-        valor = float(cfg["valor"])
-        gale_max = int(cfg["gale_max"]) if cfg["gale"] else 0
-        gale_mult = float(cfg["gale_mult"])
-
-        for nivel in range(0, gale_max + 1):
-            if not sessao["rodando"]:
-                break
-            log_msg(sessao_id, f"Entrada {direcao.upper()} R${valor} | {', '.join(achados)} | Gale {nivel}")
-            ok, ordem = iq.buy(valor, cfg["ativo"], direcao, expiracao_min)
-            if not ok:
-                log_msg(sessao_id, f"Ordem recusada: {ordem}")
+        for ativo in ativos_sel:
+            if not sessao["rodando"] or (limitar_uma_entrada and entrada_executada_nesta_vela):
                 break
 
-            resultado = iq.check_win_v3(ordem)
-            sessao["lucro"] = round(sessao["lucro"] + resultado, 2)
-            sessao["saldo"] = iq.get_balance()
-            log_msg(sessao_id, f"Resultado: {round(resultado, 2)} | Lucro sessão: {sessao['lucro']}")
+            raw_candles = iq.get_candles(ativo, timeframe, 80, time.time())
+            if not raw_candles:
+                log_msg(sessao_id, f"[{ativo}] Sem retorno de velas. Verifique se o ativo está aberto.")
+                continue
 
-            if resultado >= 0:
+            velas = [converter(v) for v in raw_candles]
+            fechadas = velas[:-1]
+            if len(fechadas) < 35:
+                log_msg(sessao_id, f"[{ativo}] Histórico insuficiente ({len(fechadas)} velas).")
+                continue
+
+            ts_ultima = fechadas[-1]["time"]
+            if ultimo_ts_por_ativo.get(ativo) == ts_ultima:
+                continue
+            ultimo_ts_por_ativo[ativo] = ts_ultima
+
+            c_ult = fechadas[-1]
+            cor_ult = "ALTA" if alta(c_ult) else ("BAIXA" if baixa(c_ult) else "DOJI")
+            direcao, achados = avaliar_sinais(
+                fechadas,
+                cfg,
+                log_fn=lambda msg, sym=ativo: log_msg(sessao_id, f"[{sym}] {msg}")
+            )
+
+            if not achados or direcao is None:
+                log_msg(sessao_id, f"[{ativo}] Vela fechou ({cor_ult} | Close: {c_ult['close']}) -> Sem gatilho.")
+                continue
+
+            valor = float(cfg["valor"])
+            gale_max = int(cfg["gale_max"]) if cfg["gale"] else 0
+            gale_mult = float(cfg["gale_mult"])
+            ordem_aberta = False
+
+            for nivel in range(0, gale_max + 1):
+                if not sessao["rodando"]:
+                    break
+                log_msg(sessao_id, f"[{ativo}] GATILHO {direcao.upper()} | R${valor} | {', '.join(achados)} | Gale {nivel}")
+                ok_ord, ordem, modalidade = enviar_ordem_iq(
+                    iq, valor, ativo, direcao, expiracao_min,
+                    log_fn=lambda msg: log_msg(sessao_id, msg)
+                )
+                if not ok_ord:
+                    log_msg(sessao_id, f"[{ativo}] Ordem recusada: {ordem}")
+                    break
+
+                ordem_aberta = True
+                log_msg(sessao_id, f"[{ativo}] Ordem aberta ({modalidade}) ID {ordem}. Aguardando expiração...")
+                resultado = aguardar_resultado_iq(iq, ordem, modalidade)
+                sessao["lucro"] = round(sessao["lucro"] + resultado, 2)
+                sessao["saldo"] = iq.get_balance()
+                log_msg(sessao_id, f"[{ativo}] Resultado: {round(resultado, 2)} | Lucro sessão: {sessao['lucro']}")
+
+                if resultado >= 0:
+                    break
+                valor = round(valor * gale_mult, 2)
+
+            if ordem_aberta:
+                entrada_executada_nesta_vela = True
+                if limitar_uma_entrada:
+                    log_msg(sessao_id, f"Limite de 1 entrada por vela atingido em [{ativo}].")
+
+            stop_win = float(cfg["stop_win"])
+            stop_loss = float(cfg["stop_loss"])
+            if stop_win > 0 and sessao["lucro"] >= stop_win:
+                log_msg(sessao_id, "Stop Win atingido! Robô encerrado.")
+                sessao["rodando"] = False
                 break
-            valor = round(valor * gale_mult, 2)
+            if stop_loss > 0 and sessao["lucro"] <= -stop_loss:
+                log_msg(sessao_id, "Stop Loss atingido! Robô encerrado.")
+                sessao["rodando"] = False
+                break
 
-        stop_win = float(cfg["stop_win"])
-        stop_loss = float(cfg["stop_loss"])
-        if stop_win > 0 and sessao["lucro"] >= stop_win:
-            log_msg(sessao_id, "Stop Win atingido! Robô encerrado.")
-            sessao["rodando"] = False
-            break
-        if stop_loss > 0 and sessao["lucro"] <= -stop_loss:
-            log_msg(sessao_id, "Stop Loss atingido! Robô encerrado.")
-            sessao["rodando"] = False
-            break
+        time.sleep(1)
 
     log_msg(sessao_id, "Robô parado.")
 
@@ -585,6 +713,7 @@ HTML_PAGE = """
             display: flex;
             gap: 8px;
             flex-wrap: wrap;
+            align-items: center;
         }
         .btn-mini {
             width: auto;
@@ -602,6 +731,65 @@ HTML_PAGE = """
         .btn-mini:hover {
             background: #1d4ed8;
             color: #ffffff;
+        }
+        .ativos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+            gap: 8px;
+            max-height: 185px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+        .ativo-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+            background: #081326;
+            padding: 8px 10px;
+            border-radius: 7px;
+            border: 1px solid #1d3969;
+            margin-top: 0;
+            cursor: pointer;
+            color: #e2e8f0;
+            font-size: 12.5px;
+            transition: border-color 0.15s ease, background 0.15s ease;
+        }
+        .ativo-item:has(input:checked) {
+            border-color: #3b82f6;
+            background: #0e2244;
+        }
+        .ativo-left {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            min-width: 0;
+        }
+        .ativo-item input[type="checkbox"] {
+            width: 15px;
+            height: 15px;
+            margin: 0;
+            cursor: pointer;
+            accent-color: #3b82f6;
+            flex-shrink: 0;
+        }
+        .ativo-tag {
+            font-size: 10px;
+            color: #93c5fd;
+            background: #0d1d3b;
+            border: 1px solid #1e3a8a;
+            padding: 1px 5px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+        .aviso-limite {
+            font-size: 12px;
+            color: #93c5fd;
+            margin-top: 8px;
+        }
+        .aviso-limite.alerta {
+            color: #fbbf24;
+            font-weight: 600;
         }
         .est-grid {
             display: grid;
@@ -851,23 +1039,6 @@ HTML_PAGE = """
                 height: 240px;
             }
         }
-        @media (max-height: 760px) and (min-width: 961px) {
-            body {
-                padding: 10px 14px 72px 14px;
-            }
-            .container, .panel-box, .col-left, .col-right, .main-grid {
-                gap: 10px;
-            }
-            .panel-box {
-                padding: 10px 14px;
-            }
-            input, select {
-                padding: 7px 10px;
-            }
-            .logs {
-                height: 250px;
-            }
-        }
         @media (max-width: 680px) {
             body {
                 padding: 10px 10px 96px 10px;
@@ -896,7 +1067,7 @@ HTML_PAGE = """
             }
         }
         @media (max-width: 480px) {
-            .cred-grid, .row, .resumo-lista, .padroes-grid, .est-grid {
+            .cred-grid, .row, .resumo-lista, .padroes-grid, .est-grid, .ativos-grid {
                 grid-template-columns: 1fr;
             }
         }
@@ -935,10 +1106,6 @@ HTML_PAGE = """
                         </select>
                     </div>
                     <div>
-                        <label>Ativo</label>
-                        <input type="text" id="ativo" value="BTCUSD">
-                    </div>
-                    <div>
                         <label>Valor Entrada</label>
                         <input type="number" id="valor" value="2" step="0.5">
                     </div>
@@ -974,6 +1141,33 @@ HTML_PAGE = """
                             <input type="number" id="gale_mult" value="2.2" step="0.1" title="Multiplicador">
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- SELEÇÃO DE ATIVOS ABERTOS (MÁXIMO 3) -->
+            <div class="panel-box">
+                <div class="secao-header">
+                    <strong>Ativos Abertos na Plataforma (<span id="qtd-ativos">1</span> / 3 selecionados)</strong>
+                    <div class="acoes-rapidas">
+                        <button type="button" class="btn-mini" id="btn-carregar-ativos" onclick="carregarAtivosAbertos()">Carregar Ativos Abertos</button>
+                        <button type="button" class="btn-mini" onclick="limparAtivos()">Limpar Seleção</button>
+                    </div>
+                </div>
+                <div class="ativos-grid" id="lista-ativos"></div>
+                <div class="aviso-limite" id="aviso-ativos">Selecione de 1 até no máximo 3 ativos abertos.</div>
+            </div>
+
+            <!-- LIMITE DE ENTRADAS POR VELA -->
+            <div class="panel-box">
+                <div class="secao-header" style="margin-bottom: 4px;">
+                    <label class="est-check" style="font-size: 13.5px;">
+                        <input type="checkbox" id="limitar_uma_entrada_vela" checked onchange="salvarPreferencias()">
+                        <span>Limitar a no máximo 1 entrada por fechamento de vela</span>
+                    </label>
+                    <span class="badge-ema badge-sim">Multi-Ativos</span>
+                </div>
+                <div style="font-size: 12px; color: #93c5fd;">
+                    Quando ativo, ao abrir 1 ordem em um dos ativos selecionados, o robô aguarda a próxima vela para operar novamente.
                 </div>
             </div>
 
@@ -1062,6 +1256,10 @@ HTML_PAGE = """
 
                 <div class="resumo-lista" style="margin-top: 10px;">
                     <div class="resumo-item">
+                        Ativos Selecionados
+                        <strong id="resumo-ativos">BTCUSD-OTC</strong>
+                    </div>
+                    <div class="resumo-item">
                         Padrões Ativos
                         <strong id="resumo-padroes">15 / 15</strong>
                     </div>
@@ -1074,8 +1272,8 @@ HTML_PAGE = """
                         <strong id="resumo-ema">ATIVADO</strong>
                     </div>
                     <div class="resumo-item">
-                        Mín. Reversão (Est. 2)
-                        <strong id="resumo-minrev">3 velas</strong>
+                        Limite 1 Entrada/Vela
+                        <strong id="resumo-limite-vela">ATIVADO</strong>
                     </div>
                 </div>
             </div>
@@ -1114,6 +1312,19 @@ HTML_PAGE = """
 </footer>
 
 <script>
+    const MAX_ATIVOS = 3;
+
+    const ATIVOS_INICIAIS = [
+        { symbol: "EURUSD-OTC", mercados: ["BINARIA", "DIGITAL"] },
+        { symbol: "GBPUSD-OTC", mercados: ["BINARIA", "DIGITAL"] },
+        { symbol: "USDJPY-OTC", mercados: ["BINARIA", "DIGITAL"] },
+        { symbol: "AUDUSD-OTC", mercados: ["BINARIA", "DIGITAL"] },
+        { symbol: "EURGBP-OTC", mercados: ["BINARIA"] },
+        { symbol: "BTCUSD-OTC", mercados: ["BINARIA", "DIGITAL"] },
+        { symbol: "EURUSD", mercados: ["BINARIA", "DIGITAL"] },
+        { symbol: "GBPUSD", mercados: ["BINARIA", "DIGITAL"] }
+    ];
+
     const PADROES_INFO = [
         ["engulfing_bull", "Engolfo de Alta (CALL)"],
         ["engulfing_bear", "Engolfo de Baixa (PUT)"],
@@ -1134,6 +1345,108 @@ HTML_PAGE = """
 
     let sessaoId = localStorage.getItem("sessao_id") || null;
     let intervalo = null;
+
+    function renderizarAtivos(listaAtivos) {
+        const container = document.getElementById("lista-ativos");
+        let salvos = JSON.parse(localStorage.getItem("ativos_selecionados") || "null");
+        if (!Array.isArray(salvos)) {
+            salvos = ["BTCUSD-OTC"];
+        }
+        salvos = salvos.slice(0, MAX_ATIVOS);
+
+        const simbolosDisponiveis = new Set(listaAtivos.map(a => a.symbol));
+        const combinados = [...listaAtivos];
+        salvos.forEach(sym => {
+            if (!simbolosDisponiveis.has(sym)) {
+                combinados.unshift({ symbol: sym, mercados: ["SELECIONADO"] });
+            }
+        });
+
+        container.innerHTML = combinados.map(item => {
+            const checked = salvos.includes(item.symbol);
+            const tag = (item.mercados || []).join("/");
+            return `
+                <label class="ativo-item">
+                    <span class="ativo-left">
+                        <input type="checkbox" class="chk-ativo" value="${item.symbol}" ${checked ? "checked" : ""} onchange="aoAlterarAtivo(this)">
+                        <span>${item.symbol}</span>
+                    </span>
+                    <span class="ativo-tag">${tag || "ABERTO"}</span>
+                </label>
+            `;
+        }).join("");
+
+        localStorage.setItem("ativos_lista_cache", JSON.stringify(combinados));
+        atualizarContagem();
+    }
+
+    function aoAlterarAtivo(checkbox) {
+        const marcados = obterAtivosSelecionados();
+        const aviso = document.getElementById("aviso-ativos");
+        if (marcados.length > MAX_ATIVOS) {
+            checkbox.checked = false;
+            aviso.innerText = `Limite máximo atingido: você pode selecionar no máximo ${MAX_ATIVOS} ativos.`;
+            aviso.classList.add("alerta");
+            return;
+        }
+        aviso.innerText = "Selecione de 1 até no máximo 3 ativos abertos.";
+        aviso.classList.remove("alerta");
+        salvarPreferencias();
+    }
+
+    function obterAtivosSelecionados() {
+        return Array.from(document.querySelectorAll(".chk-ativo:checked")).map(el => el.value).slice(0, MAX_ATIVOS);
+    }
+
+    function limparAtivos() {
+        document.querySelectorAll(".chk-ativo").forEach(el => {
+            el.checked = false;
+        });
+        const aviso = document.getElementById("aviso-ativos");
+        aviso.innerText = "Selecione de 1 até no máximo 3 ativos abertos.";
+        aviso.classList.remove("alerta");
+        salvarPreferencias();
+    }
+
+    async function carregarAtivosAbertos() {
+        const email = document.getElementById("email").value.trim();
+        const senha = document.getElementById("senha").value;
+        const aviso = document.getElementById("aviso-ativos");
+        const btn = document.getElementById("btn-carregar-ativos");
+
+        if (!email || !senha) {
+            aviso.innerText = "Preencha e-mail e senha da IQ Option para buscar os ativos abertos agora.";
+            aviso.classList.add("alerta");
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerText = "Buscando...";
+        aviso.innerText = "Conectando à IQ Option para listar ativos abertos...";
+        aviso.classList.remove("alerta");
+
+        try {
+            const res = await fetch("/ativos", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, senha })
+            });
+            const data = await res.json();
+            if (data.ok && Array.isArray(data.ativos)) {
+                renderizarAtivos(data.ativos);
+                aviso.innerText = `${data.mensagem} Marque de 1 a 3 ativos.`;
+            } else {
+                aviso.innerText = data.mensagem || "Não foi possível carregar os ativos abertos.";
+                aviso.classList.add("alerta");
+            }
+        } catch (err) {
+            aviso.innerText = "Erro de comunicação ao buscar ativos abertos.";
+            aviso.classList.add("alerta");
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "Carregar Ativos Abertos";
+        }
+    }
 
     function renderizarPadroes() {
         const container = document.getElementById("lista-padroes");
@@ -1158,6 +1471,9 @@ HTML_PAGE = """
         if (typeof cfgSalva.usar_ema_filtro === "boolean") {
             document.getElementById("usar_ema_filtro").checked = cfgSalva.usar_ema_filtro;
         }
+        if (typeof cfgSalva.limitar_uma_entrada_vela === "boolean") {
+            document.getElementById("limitar_uma_entrada_vela").checked = cfgSalva.limitar_uma_entrada_vela;
+        }
         if (typeof cfgSalva.est1_ativo === "boolean") {
             document.getElementById("est1_ativo").checked = cfgSalva.est1_ativo;
         }
@@ -1177,6 +1493,9 @@ HTML_PAGE = """
     }
 
     function salvarPreferencias() {
+        const ativosSel = obterAtivosSelecionados();
+        localStorage.setItem("ativos_selecionados", JSON.stringify(ativosSel));
+
         const selecionados = obterPadroesSelecionados();
         localStorage.setItem("padroes_ativos", JSON.stringify(selecionados));
 
@@ -1187,6 +1506,7 @@ HTML_PAGE = """
 
         localStorage.setItem("estrategias_cfg", JSON.stringify({
             usar_ema_filtro: document.getElementById("usar_ema_filtro").checked,
+            limitar_uma_entrada_vela: document.getElementById("limitar_uma_entrada_vela").checked,
             est1_ativo: document.getElementById("est1_ativo").checked,
             est2_ativo: document.getElementById("est2_ativo").checked,
             est5_ativo: document.getElementById("est5_ativo").checked,
@@ -1197,6 +1517,10 @@ HTML_PAGE = """
     }
 
     function atualizarContagem() {
+        const ativosSel = obterAtivosSelecionados();
+        document.getElementById("qtd-ativos").innerText = ativosSel.length;
+        document.getElementById("resumo-ativos").innerText = ativosSel.length ? ativosSel.join(", ") : "Nenhum";
+
         const qtdPadroes = obterPadroesSelecionados().length;
         document.getElementById("qtd-padroes").innerText = qtdPadroes;
         document.getElementById("resumo-padroes").innerText = `${qtdPadroes} / ${PADROES_INFO.length}`;
@@ -1211,8 +1535,8 @@ HTML_PAGE = """
         const emaOn = document.getElementById("usar_ema_filtro").checked;
         document.getElementById("resumo-ema").innerText = emaOn ? "ATIVADO" : "DESATIVADO";
 
-        const minRev = document.getElementById("reversao_minimo").value || "3";
-        document.getElementById("resumo-minrev").innerText = `${minRev} velas`;
+        const limiteVelaOn = document.getElementById("limitar_uma_entrada_vela").checked;
+        document.getElementById("resumo-limite-vela").innerText = limiteVelaOn ? "ATIVADO" : "DESATIVADO";
     }
 
     function marcarTodos(marcar) {
@@ -1224,6 +1548,7 @@ HTML_PAGE = """
 
     async function iniciar() {
         salvarPreferencias();
+        const ativosSel = obterAtivosSelecionados();
         const padroes = obterPadroesSelecionados();
         const est1 = document.getElementById("est1_ativo").checked;
         const est2 = document.getElementById("est2_ativo").checked;
@@ -1233,7 +1558,8 @@ HTML_PAGE = """
             email: document.getElementById("email").value,
             senha: document.getElementById("senha").value,
             conta: document.getElementById("conta").value,
-            ativo: document.getElementById("ativo").value.toUpperCase(),
+            ativos: ativosSel,
+            ativo: ativosSel[0] || "",
             valor: document.getElementById("valor").value,
             timeframe: document.getElementById("timeframe").value,
             expiracao_velas: 1,
@@ -1242,6 +1568,7 @@ HTML_PAGE = """
             gale: document.getElementById("gale").value === "true",
             gale_max: document.getElementById("gale_max").value,
             gale_mult: document.getElementById("gale_mult").value,
+            limitar_uma_entrada_vela: document.getElementById("limitar_uma_entrada_vela").checked,
             usar_ema_filtro: document.getElementById("usar_ema_filtro").checked,
             est1_ativo: est1,
             est2_ativo: est2,
@@ -1252,6 +1579,14 @@ HTML_PAGE = """
 
         if (!payload.email || !payload.senha) {
             alert("Preencha e-mail e senha!");
+            return;
+        }
+        if (ativosSel.length === 0) {
+            alert("Selecione pelo menos 1 ativo (máximo 3)!");
+            return;
+        }
+        if (ativosSel.length > MAX_ATIVOS) {
+            alert("Selecione no máximo 3 ativos!");
             return;
         }
         if (padroes.length === 0 && !est1 && !est2 && !est5) {
@@ -1309,6 +1644,8 @@ HTML_PAGE = """
         }, 2000);
     }
 
+    const cacheAtivos = JSON.parse(localStorage.getItem("ativos_lista_cache") || "null");
+    renderizarAtivos(Array.isArray(cacheAtivos) && cacheAtivos.length ? cacheAtivos : ATIVOS_INICIAIS);
     renderizarPadroes();
     if (sessaoId) {
         iniciarMonitoramento();
@@ -1322,9 +1659,20 @@ HTML_PAGE = """
 def index():
     return render_template_string(HTML_PAGE)
 
+@app.route("/ativos", methods=["POST"])
+def ativos():
+    dados = request.json or {}
+    email = str(dados.get("email", "")).strip()
+    senha = str(dados.get("senha", ""))
+    if not email or not senha:
+        return jsonify({"ok": False, "mensagem": "Informe e-mail e senha."}), 400
+
+    ok, mensagem, lista = listar_ativos_abertos_iq(email, senha)
+    return jsonify({"ok": ok, "mensagem": mensagem, "ativos": lista})
+
 @app.route("/iniciar", methods=["POST"])
 def iniciar():
-    cfg = request.json
+    cfg = request.json or {}
     sessao_id = str(uuid.uuid4())
     SESSOES[sessao_id] = {
         "rodando": True,
@@ -1338,7 +1686,7 @@ def iniciar():
 
 @app.route("/parar", methods=["POST"])
 def parar():
-    sessao_id = request.json.get("sessao_id")
+    sessao_id = (request.json or {}).get("sessao_id")
     if sessao_id in SESSOES:
         SESSOES[sessao_id]["rodando"] = False
     return jsonify({"ok": True})
