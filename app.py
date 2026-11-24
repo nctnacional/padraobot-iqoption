@@ -439,173 +439,222 @@ HTML_PAGE = """
         * { box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: #070d19;
+            background: radial-gradient(circle at top, #0c1d3d 0%, #050b16 65%);
             color: #e2e8f0;
             margin: 0;
-            padding: 16px 16px 76px 16px;
+            padding: 10px 14px 66px 14px;
             min-height: 100vh;
+            font-size: 13px;
         }
         .container {
             width: 100%;
-            max-width: 1240px;
+            max-width: 1380px;
             margin: 0 auto;
-            background: #0d172a;
-            padding: 20px;
-            border-radius: 14px;
+            background: rgba(11, 22, 43, 0.94);
+            padding: 14px 16px;
+            border-radius: 12px;
             border: 1px solid #1e3a8a;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7);
+        }
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding-bottom: 10px;
+            margin-bottom: 12px;
+            border-bottom: 1px solid #172d54;
+            flex-wrap: wrap;
+        }
+        .brand-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .brand-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #3b82f6;
+            box-shadow: 0 0 10px #3b82f6;
         }
         h2 {
-            text-align: center;
             color: #60a5fa;
-            margin: 0 0 18px 0;
+            margin: 0;
             letter-spacing: 1px;
-            font-size: clamp(20px, 3vw, 26px);
+            font-size: 19px;
+            font-weight: 800;
+        }
+        .brand-sub {
+            font-size: 11px;
+            color: #93c5fd;
+            background: #0b1933;
+            border: 1px solid #1e3a8a;
+            padding: 3px 9px;
+            border-radius: 999px;
         }
         .main-grid {
             display: grid;
-            grid-template-columns: minmax(0, 1.45fr) minmax(0, 0.95fr);
-            gap: 18px;
+            grid-template-columns: minmax(0, 1.5fr) minmax(0, 0.92fr);
+            gap: 14px;
             align-items: start;
         }
         .col-left {
             display: flex;
             flex-direction: column;
-            gap: 14px;
+            gap: 10px;
             min-width: 0;
         }
         .col-right {
             display: flex;
             flex-direction: column;
-            gap: 14px;
+            gap: 10px;
             min-width: 0;
             position: sticky;
-            top: 16px;
+            top: 10px;
         }
         .panel-box {
-            background: #11203b;
-            padding: 14px;
-            border-radius: 10px;
-            border: 1px solid #1d3557;
+            background: #0e1d38;
+            padding: 10px 12px;
+            border-radius: 9px;
+            border: 1px solid #1a335e;
         }
         label {
             display: block;
-            margin-top: 10px;
-            font-size: 13px;
+            margin-top: 6px;
+            font-size: 11.5px;
             color: #93c5fd;
+            font-weight: 500;
         }
         .panel-box > label:first-child,
-        .row > div > label:first-child {
+        .row > div > label:first-child,
+        .cred-grid > div > label:first-child {
             margin-top: 0;
         }
         input, select {
             width: 100%;
-            padding: 9px 10px;
-            margin-top: 5px;
-            border-radius: 7px;
+            padding: 6px 8px;
+            margin-top: 3px;
+            border-radius: 6px;
             border: 1px solid #1e3a8a;
-            background: #081224;
+            background: #071122;
             color: #f8fafc;
-            font-size: 14px;
+            font-size: 12.5px;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
         }
         input:focus, select:focus {
             outline: none;
             border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+        .cred-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
         }
         .row {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 10px;
-            margin-top: 8px;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+            margin-top: 7px;
         }
         .gale-inputs {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 8px;
-            margin-top: 5px;
+            gap: 5px;
+            margin-top: 3px;
         }
         .gale-inputs input {
             margin-top: 0;
+            padding: 6px 6px;
         }
         .secao-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
+            margin-bottom: 7px;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 6px;
         }
         .secao-header strong {
-            font-size: 13.5px;
+            font-size: 12.5px;
             color: #dbeafe;
         }
         .acoes-rapidas {
             display: flex;
-            gap: 6px;
+            gap: 5px;
             flex-wrap: wrap;
         }
         .btn-mini {
             width: auto;
             margin-top: 0;
-            padding: 5px 10px;
-            font-size: 12px;
-            border-radius: 6px;
-            background: #172554;
+            padding: 3px 8px;
+            font-size: 11px;
+            border-radius: 5px;
+            background: #13254a;
             color: #bfdbfe;
             border: 1px solid #2563eb;
             font-weight: 600;
             cursor: pointer;
         }
         .btn-mini:hover {
-            background: #1e3a8a;
+            background: #1d4ed8;
+            color: #ffffff;
+        }
+        .est-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 7px;
         }
         .est-card {
-            background: #091428;
-            border: 1px solid #1e3a8a;
-            border-radius: 8px;
-            padding: 10px 12px;
-            margin-bottom: 8px;
-        }
-        .est-card:last-child {
-            margin-bottom: 0;
+            background: #081224;
+            border: 1px solid #1b3663;
+            border-radius: 7px;
+            padding: 7px 9px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 5px;
         }
         .est-top {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             justify-content: space-between;
-            gap: 8px;
-            flex-wrap: wrap;
+            gap: 5px;
         }
         .est-check {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             margin-top: 0;
             cursor: pointer;
             color: #f1f5f9;
-            font-size: 13px;
+            font-size: 11.5px;
             font-weight: 600;
+            line-height: 1.25;
         }
         .est-check input[type="checkbox"] {
             width: auto;
             margin: 0;
             cursor: pointer;
-            accent-color: #2563eb;
+            accent-color: #3b82f6;
+            flex-shrink: 0;
         }
         .badge-ema {
-            font-size: 11px;
-            padding: 2px 8px;
+            font-size: 10px;
+            padding: 1px 6px;
             border-radius: 999px;
-            font-weight: 600;
+            font-weight: 700;
             white-space: nowrap;
+            flex-shrink: 0;
         }
         .badge-sim {
-            background: rgba(37, 99, 235, 0.22);
+            background: rgba(37, 99, 235, 0.24);
             color: #93c5fd;
             border: 1px solid rgba(59, 130, 246, 0.5);
         }
         .badge-nao {
-            background: rgba(30, 58, 138, 0.25);
+            background: rgba(30, 58, 138, 0.3);
             color: #cbd5e1;
             border: 1px solid rgba(148, 163, 184, 0.35);
         }
@@ -613,61 +662,64 @@ HTML_PAGE = """
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 10px;
-            margin-top: 8px;
-            font-size: 12px;
+            gap: 6px;
+            font-size: 11px;
             color: #93c5fd;
-            flex-wrap: wrap;
         }
         .est-sub input[type="number"] {
-            width: 78px;
-            padding: 5px 8px;
+            width: 58px;
+            padding: 3px 6px;
             margin-top: 0;
-            font-size: 13px;
+            font-size: 11.5px;
         }
         .padroes-grid {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 7px;
+            gap: 5px;
         }
         .padrao-item {
             display: flex;
             align-items: center;
-            gap: 7px;
-            background: #091428;
-            padding: 7px 9px;
-            border-radius: 7px;
-            border: 1px solid #1e3a8a;
+            gap: 6px;
+            background: #081224;
+            padding: 5px 8px;
+            border-radius: 6px;
+            border: 1px solid #1b3663;
             margin-top: 0;
             cursor: pointer;
             color: #e2e8f0;
-            font-size: 12px;
+            font-size: 11.5px;
+            transition: border-color 0.15s ease, background 0.15s ease;
+        }
+        .padrao-item:has(input:checked) {
+            border-color: #3b82f6;
+            background: #0d1f3d;
         }
         .padrao-item input[type="checkbox"] {
             width: auto;
             margin: 0;
             cursor: pointer;
-            accent-color: #2563eb;
+            accent-color: #3b82f6;
             flex-shrink: 0;
         }
         button.btn-main {
             width: 100%;
-            padding: 13px;
+            padding: 10px 12px;
             margin-top: 0;
             border: none;
-            border-radius: 8px;
-            font-size: 15px;
-            font-weight: 700;
+            border-radius: 7px;
+            font-size: 13.5px;
+            font-weight: 800;
             cursor: pointer;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.6px;
         }
         .btn-start {
-            background: linear-gradient(135deg, #1d4ed8, #1e3a8a);
+            background: linear-gradient(135deg, #2563eb, #1e3a8a);
             color: #ffffff;
             border: 1px solid #3b82f6;
         }
         .btn-start:hover {
-            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
         }
         .btn-stop {
             background: #b91c1c;
@@ -680,45 +732,44 @@ HTML_PAGE = """
             justify-content: space-between;
             gap: 10px;
             flex-wrap: wrap;
-            background: #091428;
-            padding: 12px 14px;
-            border-radius: 8px;
+            background: #081224;
+            padding: 9px 12px;
+            border-radius: 7px;
             border: 1px solid #1e3a8a;
             font-weight: 700;
-            font-size: 14px;
+            font-size: 13px;
             color: #bfdbfe;
         }
         .resumo-lista {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 8px;
-            margin-top: 4px;
+            gap: 6px;
         }
         .resumo-item {
-            background: #091428;
-            border: 1px solid #1e3a8a;
-            border-radius: 7px;
-            padding: 8px 10px;
-            font-size: 12px;
+            background: #081224;
+            border: 1px solid #1b3663;
+            border-radius: 6px;
+            padding: 6px 9px;
+            font-size: 11px;
             color: #93c5fd;
         }
         .resumo-item strong {
             display: block;
             color: #f8fafc;
-            font-size: 13px;
-            margin-top: 2px;
+            font-size: 12px;
+            margin-top: 1px;
         }
         .logs {
             background: #040914;
             color: #60a5fa;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-            font-size: 12px;
-            height: 310px;
+            font-size: 11.5px;
+            height: 365px;
             overflow-y: auto;
-            padding: 12px;
-            border-radius: 8px;
+            padding: 9px 10px;
+            border-radius: 7px;
             border: 1px solid #1e3a8a;
-            line-height: 1.45;
+            line-height: 1.4;
         }
 
         /* Rodapé Flutuante */
@@ -731,19 +782,19 @@ HTML_PAGE = """
             background: rgba(6, 13, 27, 0.96);
             backdrop-filter: blur(8px);
             border-top: 1px solid #1e3a8a;
-            padding: 8px 18px;
+            padding: 6px 16px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 12px;
-            box-shadow: 0 -6px 22px rgba(0, 0, 0, 0.7);
+            gap: 10px;
+            box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.7);
         }
         .footer-info {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             flex-wrap: wrap;
-            font-size: 12px;
+            font-size: 11.5px;
             color: #cbd5e1;
         }
         .footer-sep {
@@ -752,16 +803,16 @@ HTML_PAGE = """
         .footer-actions {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 7px;
             flex-shrink: 0;
         }
         .btn-social {
             display: inline-flex;
             align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
-            border-radius: 7px;
-            font-size: 12.5px;
+            gap: 5px;
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 11.5px;
             font-weight: 700;
             text-decoration: none;
             color: #ffffff;
@@ -781,9 +832,12 @@ HTML_PAGE = """
             border: 1px solid #38bdf8;
         }
 
-        @media (max-width: 980px) {
-            .padroes-grid {
+        @media (max-width: 1080px) {
+            .row {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .est-grid {
+                grid-template-columns: 1fr;
             }
         }
         @media (max-width: 860px) {
@@ -794,23 +848,23 @@ HTML_PAGE = """
                 position: static;
             }
             .logs {
-                height: 220px;
+                height: 210px;
             }
         }
         @media (max-width: 680px) {
             body {
-                padding: 10px 10px 98px 10px;
+                padding: 8px 8px 92px 8px;
             }
             .floating-footer {
                 flex-direction: column;
                 align-items: stretch;
-                gap: 8px;
-                padding: 8px 12px;
+                gap: 6px;
+                padding: 7px 10px;
             }
             .footer-info {
                 justify-content: center;
                 text-align: center;
-                font-size: 11px;
+                font-size: 10.5px;
             }
             .footer-actions {
                 justify-content: center;
@@ -820,14 +874,8 @@ HTML_PAGE = """
                 justify-content: center;
             }
         }
-        @media (max-width: 520px) {
-            .container {
-                padding: 14px;
-            }
-            .row, .resumo-lista {
-                grid-template-columns: 1fr;
-            }
-            .padroes-grid {
+        @media (max-width: 560px) {
+            .cred-grid, .row, .resumo-lista, .padroes-grid {
                 grid-template-columns: 1fr;
             }
         }
@@ -835,16 +883,27 @@ HTML_PAGE = """
 </head>
 <body>
 <div class="container">
-    <h2>BOT RLTRADER</h2>
+    <div class="topbar">
+        <div class="brand-title">
+            <span class="brand-dot"></span>
+            <h2>BOT RLTRADER</h2>
+        </div>
+        <span class="brand-sub">IQ Option • Price Action &amp; EMA 24/32</span>
+    </div>
 
     <div class="main-grid">
         <div class="col-left" id="form-config">
             <div class="panel-box">
-                <label>E-mail IQ Option</label>
-                <input type="email" id="email" placeholder="seu@email.com" required>
-
-                <label>Senha IQ Option</label>
-                <input type="password" id="senha" placeholder="********" required>
+                <div class="cred-grid">
+                    <div>
+                        <label>E-mail IQ Option</label>
+                        <input type="email" id="email" placeholder="seu@email.com" required>
+                    </div>
+                    <div>
+                        <label>Senha IQ Option</label>
+                        <input type="password" id="senha" placeholder="********" required>
+                    </div>
+                </div>
 
                 <div class="row">
                     <div>
@@ -858,9 +917,6 @@ HTML_PAGE = """
                         <label>Ativo</label>
                         <input type="text" id="ativo" value="BTCUSD">
                     </div>
-                </div>
-
-                <div class="row">
                     <div>
                         <label>Valor Entrada</label>
                         <input type="number" id="valor" value="2" step="0.5">
@@ -883,9 +939,6 @@ HTML_PAGE = """
                         <label>Stop Loss</label>
                         <input type="number" id="stop_loss" value="20">
                     </div>
-                </div>
-
-                <div class="row">
                     <div>
                         <label>Usar Martingale?</label>
                         <select id="gale">
@@ -896,8 +949,8 @@ HTML_PAGE = """
                     <div>
                         <label>Gale Máx / Mult</label>
                         <div class="gale-inputs">
-                            <input type="number" id="gale_max" value="1">
-                            <input type="number" id="gale_mult" value="2.2" step="0.1">
+                            <input type="number" id="gale_max" value="1" title="Gale Máximo">
+                            <input type="number" id="gale_mult" value="2.2" step="0.1" title="Multiplicador">
                         </div>
                     </div>
                 </div>
@@ -905,15 +958,15 @@ HTML_PAGE = """
 
             <!-- FILTRO DE MÉDIAS MÓVEIS EMA 24 E EMA 32 -->
             <div class="panel-box">
-                <div class="secao-header" style="margin-bottom: 0;">
-                    <label class="est-check" style="font-size: 13.5px;">
+                <div class="secao-header" style="margin-bottom: 2px;">
+                    <label class="est-check" style="font-size: 12.5px;">
                         <input type="checkbox" id="usar_ema_filtro" checked onchange="salvarPreferencias()">
                         <span>Filtro Alinhamento EMA 24 e EMA 32</span>
                     </label>
                     <span class="badge-ema badge-sim">Exceto Est. 5</span>
                 </div>
-                <div style="font-size: 12px; color: #93c5fd; margin-top: 6px;">
-                    Exige EMA 24 &gt; EMA 32 para CALL e EMA 24 &lt; EMA 32 para PUT. Não se aplica à Estratégia 5.
+                <div style="font-size: 11px; color: #93c5fd;">
+                    EMA 24 &gt; EMA 32 para CALL e EMA 24 &lt; EMA 32 para PUT. Não se aplica à Estratégia 5.
                 </div>
             </div>
 
@@ -923,37 +976,42 @@ HTML_PAGE = """
                     <strong>Estratégias de Conjunto de Candles</strong>
                 </div>
 
-                <div class="est-card">
-                    <div class="est-top">
-                        <label class="est-check">
-                            <input type="checkbox" id="est1_ativo" checked onchange="salvarPreferencias()">
-                            <span>ESTRATEGIA 1 - CLASSIFICADOR 5 CANDLES</span>
-                        </label>
-                        <span class="badge-ema badge-sim">Filtro EMA 24/32</span>
+                <div class="est-grid">
+                    <div class="est-card">
+                        <div class="est-top">
+                            <label class="est-check">
+                                <input type="checkbox" id="est1_ativo" checked onchange="salvarPreferencias()">
+                                <span>ESTRATEGIA 1 - CLASSIFICADOR 5 CANDLES</span>
+                            </label>
+                            <span class="badge-ema badge-sim">EMA 24/32</span>
+                        </div>
                     </div>
-                </div>
 
-                <div class="est-card">
-                    <div class="est-top">
-                        <label class="est-check">
-                            <input type="checkbox" id="est2_ativo" checked onchange="salvarPreferencias()">
-                            <span>ESTRATEGIA 2 - PADRAO DE REVERSAO</span>
-                        </label>
-                        <span class="badge-ema badge-sim">Filtro EMA 24/32</span>
+                    <div class="est-card">
+                        <div class="est-top">
+                            <label class="est-check">
+                                <input type="checkbox" id="est2_ativo" checked onchange="salvarPreferencias()">
+                                <span>ESTRATEGIA 2 - PADRAO DE REVERSAO</span>
+                            </label>
+                            <span class="badge-ema badge-sim">EMA 24/32</span>
+                        </div>
+                        <div class="est-sub">
+                            <span>Mín. anteriores (2-8):</span>
+                            <input type="number" id="reversao_minimo" min="2" max="8" step="1" value="3" onchange="salvarPreferencias()">
+                        </div>
                     </div>
-                    <div class="est-sub">
-                        <span>Mínimo de Candles Anteriores (2 a 8):</span>
-                        <input type="number" id="reversao_minimo" min="2" max="8" step="1" value="3" onchange="salvarPreferencias()">
-                    </div>
-                </div>
 
-                <div class="est-card">
-                    <div class="est-top">
-                        <label class="est-check">
-                            <input type="checkbox" id="est5_ativo" checked onchange="salvarPreferencias()">
-                            <span>ESTRATEGIA 5 - MAIOR MENOR MENOR</span>
-                        </label>
-                        <span class="badge-ema badge-nao">Sem Filtro EMA</span>
+                    <div class="est-card">
+                        <div class="est-top">
+                            <label class="est-check">
+                                <input type="checkbox" id="est5_ativo" checked onchange="salvarPreferencias()">
+                                <span>ESTRATEGIA 5 - MAIOR MENOR MENOR</span>
+                            </label>
+                            <span class="badge-ema badge-nao">Sem EMA</span>
+                        </div>
+                        <div class="est-sub">
+                            <span>Mede abertura e fechamento</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -976,12 +1034,12 @@ HTML_PAGE = """
                 <button type="button" class="btn-main btn-start" id="btn-start" onclick="iniciar()">INICIAR ROBÔ</button>
                 <button type="button" class="btn-main btn-stop" id="btn-stop" onclick="parar()">PARAR ROBÔ</button>
 
-                <div class="status-box" style="margin-top: 12px;">
+                <div class="status-box" style="margin-top: 8px;">
                     <span>Saldo: <span id="saldo">--</span></span>
                     <span>Lucro: <span id="lucro">0.00</span></span>
                 </div>
 
-                <div class="resumo-lista" style="margin-top: 10px;">
+                <div class="resumo-lista" style="margin-top: 8px;">
                     <div class="resumo-item">
                         Padrões Ativos
                         <strong id="resumo-padroes">15 / 15</strong>
@@ -1020,13 +1078,13 @@ HTML_PAGE = """
     </div>
     <div class="footer-actions">
         <a class="btn-social btn-whatsapp" href="https://wa.me/message/VHM255VINGVFM1" target="_blank" rel="noopener noreferrer">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91C21.95 6.45 17.5 2 12.04 2zm5.82 14.02c-.24.68-1.41 1.3-1.95 1.38-.5.08-1.15.11-1.85-.11-.43-.14-.98-.32-1.69-.63-2.97-1.28-4.91-4.27-5.06-4.47-.15-.2-1.21-1.61-1.21-3.07 0-1.46.76-2.18 1.03-2.48.27-.3.6-.37.8-.37.2 0 .4 0 .57.01.18.01.43-.07.67.51.24.58.82 2.01.89 2.16.07.15.12.32.02.52-.1.2-.15.32-.3.5-.15.18-.31.4-.45.54-.15.15-.31.31-.13.61.18.3.79 1.3 1.7 2.11 1.17 1.04 2.15 1.36 2.45 1.51.3.15.48.13.66-.08.18-.2.76-.89.96-1.19.2-.3.41-.25.68-.15.27.1 1.73.82 2.03.97.3.15.5.22.57.35.07.13.07.75-.17 1.43z"/>
             </svg>
             <span>WhatsApp</span>
         </a>
         <a class="btn-social btn-telegram" href="https://t.me/c/3983703001/9" target="_blank" rel="noopener noreferrer">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
             </svg>
             <span>Telegram</span>
