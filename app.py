@@ -447,7 +447,7 @@ HTML_PAGE = """
         }
         .container {
             width: 100%;
-            max-width: 1120px;
+            max-width: 1240px;
             margin: 0 auto;
             background: #0d172a;
             padding: 20px;
@@ -464,15 +464,23 @@ HTML_PAGE = """
         }
         .main-grid {
             display: grid;
-            grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.95fr);
+            grid-template-columns: minmax(0, 1.45fr) minmax(0, 0.95fr);
             gap: 18px;
             align-items: start;
         }
-        .col-left, .col-right {
+        .col-left {
             display: flex;
             flex-direction: column;
             gap: 14px;
             min-width: 0;
+        }
+        .col-right {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            min-width: 0;
+            position: sticky;
+            top: 16px;
         }
         .panel-box {
             background: #11203b;
@@ -619,7 +627,7 @@ HTML_PAGE = """
         }
         .padroes-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 7px;
         }
         .padrao-item {
@@ -633,7 +641,7 @@ HTML_PAGE = """
             margin-top: 0;
             cursor: pointer;
             color: #e2e8f0;
-            font-size: 12.5px;
+            font-size: 12px;
         }
         .padrao-item input[type="checkbox"] {
             width: auto;
@@ -680,24 +688,52 @@ HTML_PAGE = """
             font-size: 14px;
             color: #bfdbfe;
         }
+        .resumo-lista {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            margin-top: 4px;
+        }
+        .resumo-item {
+            background: #091428;
+            border: 1px solid #1e3a8a;
+            border-radius: 7px;
+            padding: 8px 10px;
+            font-size: 12px;
+            color: #93c5fd;
+        }
+        .resumo-item strong {
+            display: block;
+            color: #f8fafc;
+            font-size: 13px;
+            margin-top: 2px;
+        }
         .logs {
             background: #040914;
             color: #60a5fa;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
             font-size: 12px;
-            height: 280px;
+            height: 310px;
             overflow-y: auto;
             padding: 12px;
             border-radius: 8px;
             border: 1px solid #1e3a8a;
             line-height: 1.45;
         }
+        @media (max-width: 980px) {
+            .padroes-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
         @media (max-width: 860px) {
             .main-grid {
                 grid-template-columns: 1fr;
             }
+            .col-right {
+                position: static;
+            }
             .logs {
-                height: 210px;
+                height: 220px;
             }
         }
         @media (max-width: 520px) {
@@ -707,7 +743,7 @@ HTML_PAGE = """
             .container {
                 padding: 14px;
             }
-            .row {
+            .row, .resumo-lista {
                 grid-template-columns: 1fr;
             }
             .padroes-grid {
@@ -863,6 +899,25 @@ HTML_PAGE = """
                     <span>Saldo: <span id="saldo">--</span></span>
                     <span>Lucro: <span id="lucro">0.00</span></span>
                 </div>
+
+                <div class="resumo-lista" style="margin-top: 10px;">
+                    <div class="resumo-item">
+                        Padrões Ativos
+                        <strong id="resumo-padroes">15 / 15</strong>
+                    </div>
+                    <div class="resumo-item">
+                        Conjuntos Ativos
+                        <strong id="resumo-conjuntos">3 / 3</strong>
+                    </div>
+                    <div class="resumo-item">
+                        Filtro EMA 24/32
+                        <strong id="resumo-ema">ATIVADO</strong>
+                    </div>
+                    <div class="resumo-item">
+                        Mín. Reversão (Est. 2)
+                        <strong id="resumo-minrev">3 velas</strong>
+                    </div>
+                </div>
             </div>
 
             <div class="panel-box">
@@ -959,7 +1014,22 @@ HTML_PAGE = """
     }
 
     function atualizarContagem() {
-        document.getElementById("qtd-padroes").innerText = obterPadroesSelecionados().length;
+        const qtdPadroes = obterPadroesSelecionados().length;
+        document.getElementById("qtd-padroes").innerText = qtdPadroes;
+        document.getElementById("resumo-padroes").innerText = `${qtdPadroes} / ${PADROES_INFO.length}`;
+
+        const conjuntosAtivos = [
+            document.getElementById("est1_ativo").checked,
+            document.getElementById("est2_ativo").checked,
+            document.getElementById("est5_ativo").checked
+        ].filter(Boolean).length;
+        document.getElementById("resumo-conjuntos").innerText = `${conjuntosAtivos} / 3`;
+
+        const emaOn = document.getElementById("usar_ema_filtro").checked;
+        document.getElementById("resumo-ema").innerText = emaOn ? "ATIVADO" : "DESATIVADO";
+
+        const minRev = document.getElementById("reversao_minimo").value || "3";
+        document.getElementById("resumo-minrev").innerText = `${minRev} velas`;
     }
 
     function marcarTodos(marcar) {
