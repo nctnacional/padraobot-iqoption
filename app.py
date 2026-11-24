@@ -442,7 +442,7 @@ HTML_PAGE = """
             background: #070d19;
             color: #e2e8f0;
             margin: 0;
-            padding: 16px;
+            padding: 16px 16px 76px 16px;
             min-height: 100vh;
         }
         .container {
@@ -720,6 +720,67 @@ HTML_PAGE = """
             border: 1px solid #1e3a8a;
             line-height: 1.45;
         }
+
+        /* Rodapé Flutuante */
+        .floating-footer {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 999;
+            background: rgba(6, 13, 27, 0.96);
+            backdrop-filter: blur(8px);
+            border-top: 1px solid #1e3a8a;
+            padding: 8px 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            box-shadow: 0 -6px 22px rgba(0, 0, 0, 0.7);
+        }
+        .footer-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            font-size: 12px;
+            color: #cbd5e1;
+        }
+        .footer-sep {
+            color: #475569;
+        }
+        .footer-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        .btn-social {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 7px;
+            font-size: 12.5px;
+            font-weight: 700;
+            text-decoration: none;
+            color: #ffffff;
+            transition: transform 0.15s ease, filter 0.15s ease;
+            white-space: nowrap;
+        }
+        .btn-social:hover {
+            transform: translateY(-1px);
+            filter: brightness(1.08);
+        }
+        .btn-whatsapp {
+            background: #16a34a;
+            border: 1px solid #22c55e;
+        }
+        .btn-telegram {
+            background: #0284c7;
+            border: 1px solid #38bdf8;
+        }
+
         @media (max-width: 980px) {
             .padroes-grid {
                 grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -736,10 +797,30 @@ HTML_PAGE = """
                 height: 220px;
             }
         }
-        @media (max-width: 520px) {
+        @media (max-width: 680px) {
             body {
-                padding: 10px;
+                padding: 10px 10px 98px 10px;
             }
+            .floating-footer {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+                padding: 8px 12px;
+            }
+            .footer-info {
+                justify-content: center;
+                text-align: center;
+                font-size: 11px;
+            }
+            .footer-actions {
+                justify-content: center;
+            }
+            .btn-social {
+                flex: 1;
+                justify-content: center;
+            }
+        }
+        @media (max-width: 520px) {
             .container {
                 padding: 14px;
             }
@@ -929,6 +1010,29 @@ HTML_PAGE = """
         </div>
     </div>
 </div>
+
+<!-- RODAPÉ FLUTUANTE -->
+<footer class="floating-footer">
+    <div class="footer-info">
+        <span>Todos os direitos reservados RL_TRADER_B3 2027</span>
+        <span class="footer-sep">|</span>
+        <span>Leitura informativa gerada por IA. Não é recomendação de investimento.</span>
+    </div>
+    <div class="footer-actions">
+        <a class="btn-social btn-whatsapp" href="https://wa.me/message/VHM255VINGVFM1" target="_blank" rel="noopener noreferrer">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91C21.95 6.45 17.5 2 12.04 2zm5.82 14.02c-.24.68-1.41 1.3-1.95 1.38-.5.08-1.15.11-1.85-.11-.43-.14-.98-.32-1.69-.63-2.97-1.28-4.91-4.27-5.06-4.47-.15-.2-1.21-1.61-1.21-3.07 0-1.46.76-2.18 1.03-2.48.27-.3.6-.37.8-.37.2 0 .4 0 .57.01.18.01.43-.07.67.51.24.58.82 2.01.89 2.16.07.15.12.32.02.52-.1.2-.15.32-.3.5-.15.18-.31.4-.45.54-.15.15-.31.31-.13.61.18.3.79 1.3 1.7 2.11 1.17 1.04 2.15 1.36 2.45 1.51.3.15.48.13.66-.08.18-.2.76-.89.96-1.19.2-.3.41-.25.68-.15.27.1 1.73.82 2.03.97.3.15.5.22.57.35.07.13.07.75-.17 1.43z"/>
+            </svg>
+            <span>WhatsApp</span>
+        </a>
+        <a class="btn-social btn-telegram" href="https://t.me/c/3983703001/9" target="_blank" rel="noopener noreferrer">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
+            </svg>
+            <span>Telegram</span>
+        </a>
+    </div>
+</footer>
 
 <script>
     const PADROES_INFO = [
